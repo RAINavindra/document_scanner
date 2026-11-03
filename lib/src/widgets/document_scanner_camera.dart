@@ -1,6 +1,7 @@
 import 'package:camera/camera.dart';
 import 'package:document_scan/document_scan.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../controller/document_scanner_controller.dart';
 import '../models/overlay_style.dart';
@@ -32,6 +33,9 @@ class DocumentScannerCamera extends StatefulWidget {
     this.edgeColor,
     this.steadyEdgeColor,
     this.fillColor,
+    this.isGalleryImportAllowed = false,
+    this.bottomTrailingWidget,
+    this.onClose,
   });
 
   /// The active scanner controller.
@@ -73,6 +77,16 @@ class DocumentScannerCamera extends StatefulWidget {
   /// Optional shortcut to override the quad fill color.
   /// When provided, this overrides [overlayStyle.fillColor].
   final Color? fillColor;
+
+  /// Whether to allow the user to import and scan existing images from the device gallery.
+  final bool isGalleryImportAllowed;
+
+  /// Optional widget displayed on the bottom right (e.g. Done button in multi-page flow).
+  final Widget? bottomTrailingWidget;
+
+  /// Callback when the close/back button is tapped.
+  /// If null, defaults to `Navigator.of(context).maybePop()`.
+  final VoidCallback? onClose;
 
   @override
   State<DocumentScannerCamera> createState() => _DocumentScannerCameraState();
@@ -211,6 +225,62 @@ class _DocumentScannerCameraState extends State<DocumentScannerCamera>
           widget.onScanned?.call(doc);
         }
       }
+    } finally {
+      _isCapturingLocally = false;
+    }
+  }
+
+  Future<void> _handleGalleryImport() async {
+    if (_isCapturingLocally) return;
+    _isCapturingLocally = true;
+
+    try {
+      final picker = ImagePicker();
+      final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+      if (!mounted || pickedFile == null) return;
+
+      // 1. Detect corners on the picked still image
+      final detector = DocumentDetector();
+      final fileCorners = await detector.detect(
+        ScanInput.file(pickedFile.path),
+        sensitivity: DetectionSensitivity.lenient,
+      );
+
+      final corners = fileCorners ??
+          const DocumentCorners(
+            topLeft: (x: 0.08, y: 0.08),
+            topRight: (x: 0.92, y: 0.08),
+            bottomRight: (x: 0.92, y: 0.92),
+            bottomLeft: (x: 0.08, y: 0.92),
+          );
+
+      if (!mounted) return;
+
+      // 2. Open manual corner adjustment screen
+      final result = await Navigator.of(context).push<ScannedDocument>(
+        MaterialPageRoute(
+          builder: (_) => CropAdjustmentScreen(
+            imagePath: pickedFile.path,
+            initialCorners: corners,
+            controller: widget.controller,
+            overlayStyle: _effectiveOverlayStyle,
+            onCropped: (doc) {
+              Navigator.of(context).pop(doc);
+            },
+            imageFilters: widget.imageFilters,
+            initialFilter: widget.initialFilter,
+          ),
+        ),
+      );
+
+      if (result != null && mounted) {
+        widget.onScanned?.call(result);
+      } else if (mounted) {
+        await widget.controller.resumePreview();
+      }
+    } catch (e) {
+      debugPrint('Error importing image from gallery: $e');
+      widget.onError?.call('Failed to import image from gallery: $e');
     } finally {
       _isCapturingLocally = false;
     }
@@ -370,7 +440,8 @@ class _DocumentScannerCameraState extends State<DocumentScannerCamera>
                     backgroundColor: Colors.black45,
                     child: IconButton(
                       icon: const Icon(Icons.arrow_back, color: Colors.white),
-                      onPressed: () => Navigator.of(context).maybePop(),
+                      onPressed: widget.onClose ??
+                          () => Navigator.of(context).maybePop(),
                     ),
                   ),
 
@@ -434,49 +505,83 @@ class _DocumentScannerCameraState extends State<DocumentScannerCamera>
             child: Center(child: _buildStatusBadge()),
           ),
 
-          // 5. Bottom shutter capture button
+          // 5. Bottom controls (Gallery + Shutter + Trailing widget)
           Positioned(
             bottom: MediaQuery.of(context).padding.bottom + 24,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: GestureDetector(
-                onTap:
-                    (widget.controller.state == ScannerState.previewing &&
-                        !_isCapturingLocally)
-                    ? _handleCapture
-                    : null,
-                child: Container(
-                  width: 76,
-                  height: 76,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: isSteady
-                          ? _effectiveOverlayStyle.steadyBorderColor
-                          : Colors.white,
-                      width: 4.0,
-                    ),
-                  ),
-                  child: Center(
-                    child: Container(
-                      width: 60,
-                      height: 60,
-                      decoration: BoxDecoration(
+            left: 20,
+            right: 20,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                // Center shutter capture button
+                GestureDetector(
+                  onTap:
+                      (widget.controller.state == ScannerState.previewing &&
+                          !_isCapturingLocally)
+                      ? _handleCapture
+                      : null,
+                  child: Container(
+                    width: 76,
+                    height: 76,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
                         color: isSteady
                             ? _effectiveOverlayStyle.steadyBorderColor
                             : Colors.white,
-                        shape: BoxShape.circle,
+                        width: 4.0,
                       ),
-                      child: const Icon(
-                        Icons.camera_alt,
-                        color: Colors.black87,
-                        size: 30,
+                    ),
+                    child: Center(
+                      child: Container(
+                        width: 60,
+                        height: 60,
+                        decoration: BoxDecoration(
+                          color: isSteady
+                              ? _effectiveOverlayStyle.steadyBorderColor
+                              : Colors.white,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.camera_alt,
+                          color: Colors.black87,
+                          size: 30,
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
+
+                // Left: Gallery import button
+                if (widget.isGalleryImportAllowed)
+                  Positioned(
+                    left: 4,
+                    child: CircleAvatar(
+                      radius: 26,
+                      backgroundColor: Colors.black45,
+                      child: IconButton(
+                        icon: const Icon(
+                          Icons.photo_library,
+                          color: Colors.white,
+                          size: 24,
+                        ),
+                        tooltip: 'Import from Gallery',
+                        onPressed: (!_isCapturingLocally &&
+                                widget.controller.state ==
+                                    ScannerState.previewing)
+                            ? _handleGalleryImport
+                            : null,
+                      ),
+                    ),
+                  ),
+
+                // Right: Optional trailing widget (e.g. Done button in multi-page flow)
+                if (widget.bottomTrailingWidget != null)
+                  Positioned(
+                    right: 4,
+                    child: widget.bottomTrailingWidget!,
+                  ),
+              ],
             ),
           ),
         ],

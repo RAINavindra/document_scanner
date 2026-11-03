@@ -66,9 +66,44 @@ android {
 
 ## Quickstart
 
-### 1. Drop-In Scanner Camera View
+### 1. One-Line Turnkey API (Recommended)
 
-The simplest way to scan documents is using the `DocumentScannerCamera` widget:
+Call `DocumentScanner.getPictures(...)` directly without manually creating controllers, routes, or widgets. It launches a complete scanning flow with camera preview, auto-capture, gallery import, manual corner adjustment, and filters, returning a list of local image file paths:
+
+```dart
+import 'package:document_scanner/document_scanner.dart';
+
+// In any async function:
+final List<String>? pictures = await DocumentScanner.getPictures(
+  context: context, // optional if DocumentScanner.navigatorKey is set in MaterialApp
+  isGalleryImportAllowed: true,
+  noOfPages: 3, // optional limit; batch scans until limit or user taps 'Done'
+  edgeColor: Colors.blueAccent,
+);
+
+if (pictures != null && pictures.isNotEmpty) {
+  for (final path in pictures) {
+    print('Scanned document saved at: $path');
+  }
+}
+```
+
+#### Setup with `navigatorKey` (No `BuildContext` Needed):
+```dart
+MaterialApp(
+  navigatorKey: DocumentScanner.navigatorKey,
+  home: const MyHomePage(),
+);
+
+// Then anywhere in your app:
+final pictures = await DocumentScanner.getPictures(isGalleryImportAllowed: true);
+```
+
+---
+
+### 2. Embeddable Scanner Camera Widget (Advanced)
+
+If you need custom routing or want to embed the scanner directly into an existing widget tree:
 
 ```dart
 import 'package:document_scanner/document_scanner.dart';

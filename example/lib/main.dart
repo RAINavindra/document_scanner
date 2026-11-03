@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:document_scanner/document_scanner.dart';
 import 'package:flutter/material.dart';
 
@@ -12,6 +13,7 @@ class DocumentScannerExampleApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Document Scanner Demo',
+      navigatorKey: DocumentScanner.navigatorKey,
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
@@ -41,29 +43,22 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  final List<ScannedDocument> _scannedDocs = [];
+  final List<String> _scannedFiles = [];
 
   void _openScanner() async {
-    final controller = DocumentScannerController(
-      enableAutoCapture: true,
-      defaultFilter: ScanFilter.enhance,
-      sensitivity: DetectionSensitivity.lenient,
+    // One-line scanner invocation
+    final List<String>? files = await DocumentScanner.getPictures(
+      context: context,
+      isGalleryImportAllowed: true,
+      edgeColor: Colors.blueAccent,
+      noOfPages: 1,
+      steadyEdgeColor: Colors.greenAccent,
     );
 
-    final ScannedDocument? result = await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => ScannerScreen(controller: controller)),
-    );
-
-    if (result != null) {
+    if (files != null && files.isNotEmpty) {
       setState(() {
-        _scannedDocs.insert(0, result);
+        _scannedFiles.insertAll(0, files);
       });
-
-      if (mounted) {
-        Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => ResultScreen(document: result)),
-        );
-      }
     }
   }
 
@@ -71,7 +66,7 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Document Scanner'), centerTitle: true),
-      body: _scannedDocs.isEmpty
+      body: _scannedFiles.isEmpty
           ? Center(
               child: Padding(
                 padding: const EdgeInsets.all(32.0),
@@ -103,7 +98,7 @@ class _HomePageState extends State<HomePage> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Capture documents from the live camera stream with automatic edge detection and perspective correction.',
+                      'Tap below to launch the one-line document scanner with edge detection, gallery import, and perspective crop.',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 14,
@@ -128,12 +123,13 @@ class _HomePageState extends State<HomePage> {
             )
           : ListView.builder(
               padding: const EdgeInsets.all(16),
-              itemCount: _scannedDocs.length,
+              itemCount: _scannedFiles.length,
               itemBuilder: (context, index) {
-                final doc = _scannedDocs[index];
-                final sizeKb = (doc.bytes.lengthInBytes / 1024).toStringAsFixed(
-                  1,
-                );
+                final filePath = _scannedFiles[index];
+                final file = File(filePath);
+                final sizeKb = file.existsSync()
+                    ? (file.lengthSync() / 1024).toStringAsFixed(1)
+                    : '0';
 
                 return Card(
                   margin: const EdgeInsets.only(bottom: 12),
@@ -142,7 +138,7 @@ class _HomePageState extends State<HomePage> {
                     onTap: () {
                       Navigator.of(context).push(
                         MaterialPageRoute(
-                          builder: (_) => ResultScreen(document: doc),
+                          builder: (_) => ResultScreen(filePath: filePath),
                         ),
                       );
                     },
@@ -152,8 +148,8 @@ class _HomePageState extends State<HomePage> {
                         children: [
                           ClipRRect(
                             borderRadius: BorderRadius.circular(8),
-                            child: Image.memory(
-                              doc.bytes,
+                            child: Image.file(
+                              file,
                               width: 70,
                               height: 90,
                               fit: BoxFit.cover,
@@ -165,7 +161,7 @@ class _HomePageState extends State<HomePage> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'Document #${_scannedDocs.length - index}',
+                                  'Document #${_scannedFiles.length - index}',
                                   style: const TextStyle(
                                     fontWeight: FontWeight.bold,
                                     fontSize: 16,
@@ -173,14 +169,17 @@ class _HomePageState extends State<HomePage> {
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  'Resolution: ${doc.width} x ${doc.height}',
+                                  file.path.split('/').last,
                                   style: TextStyle(
-                                    fontSize: 13,
+                                    fontSize: 12,
                                     color: Theme.of(
                                       context,
                                     ).colorScheme.onSurfaceVariant,
                                   ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
+                                const SizedBox(height: 4),
                                 Text(
                                   'Size: $sizeKb KB',
                                   style: TextStyle(
@@ -201,7 +200,7 @@ class _HomePageState extends State<HomePage> {
                 );
               },
             ),
-      floatingActionButton: _scannedDocs.isNotEmpty
+      floatingActionButton: _scannedFiles.isNotEmpty
           ? FloatingActionButton.extended(
               onPressed: _openScanner,
               icon: const Icon(Icons.camera_alt),
@@ -212,39 +211,17 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
-class ScannerScreen extends StatelessWidget {
-  const ScannerScreen({super.key, required this.controller});
-
-  final DocumentScannerController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    return DocumentScannerCamera(
-      controller: controller,
-      appBarTitle: 'Scan Document',
-      openCropScreenOnCapture: true,
-      imageFilters: [ScanFilter.enhance, ScanFilter.sharpen],
-      initialFilter: ScanFilter.enhance,
-      onScanned: (document) {
-        Navigator.of(context).pop(document);
-      },
-      onError: (error) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error: $error')));
-      },
-    );
-  }
-}
-
 class ResultScreen extends StatelessWidget {
-  const ResultScreen({super.key, required this.document});
+  const ResultScreen({super.key, required this.filePath});
 
-  final ScannedDocument document;
+  final String filePath;
 
   @override
   Widget build(BuildContext context) {
-    final sizeKb = (document.bytes.lengthInBytes / 1024).toStringAsFixed(1);
+    final file = File(filePath);
+    final sizeKb = file.existsSync()
+        ? (file.lengthSync() / 1024).toStringAsFixed(1)
+        : '0';
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -272,13 +249,9 @@ class ResultScreen extends StatelessWidget {
                         ),
                       ),
                       const Divider(height: 24),
-                      Text(
-                        'Dimensions: ${document.width} x ${document.height} px',
-                      ),
+                      Text('File Path: $filePath'),
                       const SizedBox(height: 8),
                       Text('File Size: $sizeKb KB'),
-                      const SizedBox(height: 8),
-                      Text('Format: PNG (Perspective Warped)'),
                     ],
                   ),
                 ),
@@ -291,7 +264,7 @@ class ResultScreen extends StatelessWidget {
         child: InteractiveViewer(
           minScale: 0.5,
           maxScale: 4.0,
-          child: Image.memory(document.bytes, fit: BoxFit.contain),
+          child: Image.file(file, fit: BoxFit.contain),
         ),
       ),
       bottomNavigationBar: SafeArea(
