@@ -49,6 +49,8 @@ class _CropAdjustmentScreenState extends State<CropAdjustmentScreen> {
   late ScanFilter _selectedFilter;
   bool _isProcessing = false;
 
+  Size? _imageSize;
+
   // Active dragged corner index (0: TL, 1: TR, 2: BR, 3: BL) or null
   int? _activeCornerIndex;
   Offset? _dragPosition;
@@ -61,6 +63,55 @@ class _CropAdjustmentScreenState extends State<CropAdjustmentScreen> {
     _br = widget.initialCorners.bottomRight;
     _bl = widget.initialCorners.bottomLeft;
     _selectedFilter = widget.initialFilter;
+    _resolveImageSize();
+  }
+
+  void _resolveImageSize() {
+    final image = FileImage(File(widget.imagePath));
+    image.resolve(const ImageConfiguration()).addListener(
+      ImageStreamListener(
+        (ImageInfo info, bool _) {
+          if (mounted) {
+            setState(() {
+              _imageSize = Size(
+                info.image.width.toDouble(),
+                info.image.height.toDouble(),
+              );
+            });
+          }
+        },
+        onError: (dynamic error, StackTrace? stackTrace) {
+          debugPrint('Error resolving image size: $error');
+        },
+      ),
+    );
+  }
+
+  Rect _computeImageRect(Size container, Size imageSize) {
+    if (imageSize.width <= 0 ||
+        imageSize.height <= 0 ||
+        container.width <= 0 ||
+        container.height <= 0) {
+      return Offset.zero & container;
+    }
+    final containerAspect = container.width / container.height;
+    final imageAspect = imageSize.width / imageSize.height;
+
+    final double w, h;
+    if (imageAspect > containerAspect) {
+      w = container.width;
+      h = container.width / imageAspect;
+    } else {
+      h = container.height;
+      w = container.height * imageAspect;
+    }
+
+    return Rect.fromLTWH(
+      (container.width - w) / 2,
+      (container.height - h) / 2,
+      w,
+      h,
+    );
   }
 
   DocumentCorners get _currentCorners => DocumentCorners(
@@ -106,9 +157,9 @@ class _CropAdjustmentScreenState extends State<CropAdjustmentScreen> {
     });
   }
 
-  void _updateCorner(int index, Offset delta, Size size) {
-    final dx = delta.dx / size.width;
-    final dy = delta.dy / size.height;
+  void _updateCorner(int index, Offset delta, Rect imageRect) {
+    final dx = imageRect.width > 0 ? delta.dx / imageRect.width : 0.0;
+    final dy = imageRect.height > 0 ? delta.dy / imageRect.height : 0.0;
 
     setState(() {
       switch (index) {
@@ -140,9 +191,12 @@ class _CropAdjustmentScreenState extends State<CropAdjustmentScreen> {
     });
   }
 
-  Widget _buildCornerHandle(int index, ScanPoint point, Size size) {
+  Widget _buildCornerHandle(int index, ScanPoint point, Rect imageRect) {
     const handleHitbox = 44.0;
-    final pos = Offset(point.x * size.width, point.y * size.height);
+    final pos = Offset(
+      imageRect.left + point.x * imageRect.width,
+      imageRect.top + point.y * imageRect.height,
+    );
 
     return Positioned(
       left: pos.dx - (handleHitbox / 2),
@@ -158,7 +212,7 @@ class _CropAdjustmentScreenState extends State<CropAdjustmentScreen> {
           });
         },
         onPanUpdate: (details) {
-          _updateCorner(index, details.delta, size);
+          _updateCorner(index, details.delta, imageRect);
           setState(() {
             _dragPosition = Offset(
               details.globalPosition.dx,
@@ -240,6 +294,9 @@ class _CropAdjustmentScreenState extends State<CropAdjustmentScreen> {
                   LayoutBuilder(
                     builder: (context, constraints) {
                       final size = Size(constraints.maxWidth, constraints.maxHeight);
+                      final imageRect = _imageSize != null
+                          ? _computeImageRect(size, _imageSize!)
+                          : (Offset.zero & size);
 
                       return Stack(
                         fit: StackFit.expand,
@@ -250,7 +307,7 @@ class _CropAdjustmentScreenState extends State<CropAdjustmentScreen> {
                             scaleEnabled: false,
                             child: Image.file(
                               File(widget.imagePath),
-                              fit: BoxFit.fill,
+                              fit: BoxFit.contain,
                               width: size.width,
                               height: size.height,
                             ),
@@ -265,14 +322,15 @@ class _CropAdjustmentScreenState extends State<CropAdjustmentScreen> {
                                 fillColor: widget.overlayStyle.fillColor,
                                 showCornerDots: false,
                               ),
+                              imageRect: imageRect,
                             ),
                           ),
 
                           // Draggable corner handles
-                          _buildCornerHandle(0, _tl, size),
-                          _buildCornerHandle(1, _tr, size),
-                          _buildCornerHandle(2, _br, size),
-                          _buildCornerHandle(3, _bl, size),
+                          _buildCornerHandle(0, _tl, imageRect),
+                          _buildCornerHandle(1, _tr, imageRect),
+                          _buildCornerHandle(2, _br, imageRect),
+                          _buildCornerHandle(3, _bl, imageRect),
 
                           // Magnifier glass while dragging
                           if (_activeCornerIndex != null && _dragPosition != null)

@@ -105,18 +105,31 @@ class _DocumentScannerCameraState extends State<DocumentScannerCamera>
 
     try {
       if (widget.openCropScreenOnCapture) {
+        // Save stream corners as a fallback before stopping stream and taking photo
+        final streamCorners = widget.controller.detectedCorners;
+
         // 1. Take still photo without immediate crop
         final imagePath = await widget.controller.takePhoto();
         if (!mounted || imagePath == null) return;
 
+        // Re-detect on the actual still image for accurate corners on full-res image
+        final detector = DocumentDetector();
+        final fileCorners = await detector.detect(
+          ScanInput.file(imagePath),
+          sensitivity: DetectionSensitivity.lenient,
+        );
+
         // 2. Open manual corner adjustment screen
-        final corners = widget.controller.detectedCorners ??
+        final corners = fileCorners ??
+            streamCorners ??
             const DocumentCorners(
               topLeft: (x: 0.08, y: 0.08),
               topRight: (x: 0.92, y: 0.08),
               bottomRight: (x: 0.92, y: 0.92),
               bottomLeft: (x: 0.08, y: 0.92),
             );
+
+        if (!mounted) return;
 
         final result = await Navigator.of(context).push<ScannedDocument>(
           MaterialPageRoute(
@@ -269,20 +282,21 @@ class _DocumentScannerCameraState extends State<DocumentScannerCamera>
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // 1. Camera live preview fitted to screen
+          // 1. Camera live preview with real-time edge detection quad overlay
           Center(
-            child: CameraPreview(camera),
-          ),
-
-          // 2. Real-time edge detection quad overlay
-          if (widget.controller.detectedCorners != null)
-            CustomPaint(
-              painter: QuadOverlayPainter(
-                corners: widget.controller.detectedCorners!,
-                style: widget.overlayStyle,
-                isSteady: isSteady,
-              ),
+            child: CameraPreview(
+              camera,
+              child: widget.controller.detectedCorners != null
+                  ? CustomPaint(
+                      painter: QuadOverlayPainter(
+                        corners: widget.controller.detectedCorners!,
+                        style: widget.overlayStyle,
+                        isSteady: isSteady,
+                      ),
+                    )
+                  : null,
             ),
+          ),
 
           // 3. Top controls bar
           if (widget.showTopControls)

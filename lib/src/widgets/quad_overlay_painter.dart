@@ -9,18 +9,33 @@ class QuadOverlayPainter extends CustomPainter {
     required this.corners,
     required this.style,
     this.isSteady = false,
+    this.imageRect,
   });
 
   final DocumentCorners corners;
   final OverlayStyle style;
   final bool isSteady;
+  final Rect? imageRect;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final tl = Offset(corners.topLeft.x * size.width, corners.topLeft.y * size.height);
-    final tr = Offset(corners.topRight.x * size.width, corners.topRight.y * size.height);
-    final br = Offset(corners.bottomRight.x * size.width, corners.bottomRight.y * size.height);
-    final bl = Offset(corners.bottomLeft.x * size.width, corners.bottomLeft.y * size.height);
+    final rect = imageRect ?? (Offset.zero & size);
+    final tl = Offset(
+      rect.left + corners.topLeft.x * rect.width,
+      rect.top + corners.topLeft.y * rect.height,
+    );
+    final tr = Offset(
+      rect.left + corners.topRight.x * rect.width,
+      rect.top + corners.topRight.y * rect.height,
+    );
+    final br = Offset(
+      rect.left + corners.bottomRight.x * rect.width,
+      rect.top + corners.bottomRight.y * rect.height,
+    );
+    final bl = Offset(
+      rect.left + corners.bottomLeft.x * rect.width,
+      rect.top + corners.bottomLeft.y * rect.height,
+    );
 
     // 1. Build polygon path
     final quadPath = Path()
@@ -91,7 +106,8 @@ class QuadOverlayPainter extends CustomPainter {
   bool shouldRepaint(covariant QuadOverlayPainter oldDelegate) {
     return oldDelegate.corners != corners ||
         oldDelegate.style != style ||
-        oldDelegate.isSteady != isSteady;
+        oldDelegate.isSteady != isSteady ||
+        oldDelegate.imageRect != imageRect;
   }
 }
 

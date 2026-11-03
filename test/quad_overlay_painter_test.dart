@@ -43,7 +43,15 @@ void main() {
         isSteady: true,
       );
 
+      const painter3 = QuadOverlayPainter(
+        corners: corners,
+        style: OverlayStyle(),
+        isSteady: false,
+        imageRect: Rect.fromLTWH(10, 10, 100, 100),
+      );
+
       expect(painter2.shouldRepaint(painter1), isTrue);
+      expect(painter3.shouldRepaint(painter1), isTrue);
     });
   });
 }

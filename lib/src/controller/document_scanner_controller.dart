@@ -15,7 +15,7 @@ class DocumentScannerController extends ChangeNotifier {
     this.enableAutoCapture = true,
     this.defaultFilter = ScanFilter.enhance,
     this.minDetectionInterval = const Duration(milliseconds: 100),
-    this.sensitivity = DetectionSensitivity.balanced,
+    this.sensitivity = DetectionSensitivity.strict,
     this.requiredSteadyFrames = 3,
   }) : _autoCaptureAnalyzer = AutoCaptureAnalyzer(
          requiredSteadyFrames: requiredSteadyFrames,
@@ -46,7 +46,7 @@ class DocumentScannerController extends ChangeNotifier {
   // Dependencies
   final DocumentDetector _detector = DocumentDetector();
   final DocumentProcessor _processor = const DocumentProcessor();
-  final CornerStabilizer _stabilizer = CornerStabilizer();
+  final CornerStabilizer _stabilizer = CornerStabilizer(smoothing: 0.7);
   final AutoCaptureAnalyzer _autoCaptureAnalyzer;
 
   // Stream management
@@ -229,7 +229,7 @@ class DocumentScannerController extends ChangeNotifier {
     DocumentCorners? manualCorners,
     ScanFilter? filter,
   }) async {
-    final cornersToCrop = manualCorners ?? _detectedCorners;
+    final streamCorners = _detectedCorners;
 
     final imagePath = await takePhoto();
     if (imagePath == null) return null;
@@ -237,6 +237,15 @@ class DocumentScannerController extends ChangeNotifier {
     _setState(ScannerState.processing);
 
     try {
+      DocumentCorners? cornersToCrop = manualCorners;
+      if (cornersToCrop == null) {
+        final fileCorners = await _detector.detect(
+          ScanInput.file(imagePath),
+          sensitivity: DetectionSensitivity.lenient,
+        );
+        cornersToCrop = fileCorners ?? streamCorners;
+      }
+
       // Perform perspective correction & filtering on a background isolate
       final scannedDoc = await _processor.crop(
         ScanInput.file(imagePath),
