@@ -1,0 +1,20 @@
+name: document_scanner
+description: "A turnkey document scanner widget for Flutter. Live camera preview with real-time edge detection overlay, auto-capture, manual corner adjustment, and document processing."
+version: 0.0.1
+homepage:
+
+environment:
+  sdk: ^3.12.1
+  flutter: '>=3.3.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  camera: ^0.11.3+1
+  document_scan: ^0.4.0
+  permission_handler: ^12.0.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
