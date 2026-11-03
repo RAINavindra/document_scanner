@@ -15,6 +15,33 @@ class OverlayStyle {
     this.pulseWhenSteady = true,
   });
 
+  /// Creates an [OverlayStyle] where edge, line, fill, and grid colors are
+  /// automatically harmonized from a single base [color].
+  factory OverlayStyle.fromColor(
+    Color color, {
+    Color? steadyBorderColor,
+    double borderWidth = 2.5,
+    double cornerDotRadius = 6.0,
+    Color cornerDotColor = Colors.white,
+    bool showCornerDots = true,
+    bool showGridLines = false,
+    Color? gridColor,
+    bool pulseWhenSteady = true,
+  }) {
+    return OverlayStyle(
+      borderColor: color,
+      fillColor: color.withValues(alpha: 0.2),
+      steadyBorderColor: steadyBorderColor ?? const Color(0xFF00E676),
+      borderWidth: borderWidth,
+      cornerDotRadius: cornerDotRadius,
+      cornerDotColor: cornerDotColor,
+      showCornerDots: showCornerDots,
+      showGridLines: showGridLines,
+      gridColor: gridColor ?? color.withValues(alpha: 0.15),
+      pulseWhenSteady: pulseWhenSteady,
+    );
+  }
+
   /// Fill color inside the detected document quad.
   final Color fillColor;
 
@@ -70,5 +97,35 @@ class OverlayStyle {
       pulseWhenSteady: pulseWhenSteady ?? this.pulseWhenSteady,
     );
   }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is OverlayStyle &&
+          runtimeType == other.runtimeType &&
+          fillColor == other.fillColor &&
+          borderColor == other.borderColor &&
+          steadyBorderColor == other.steadyBorderColor &&
+          borderWidth == other.borderWidth &&
+          cornerDotRadius == other.cornerDotRadius &&
+          cornerDotColor == other.cornerDotColor &&
+          showCornerDots == other.showCornerDots &&
+          showGridLines == other.showGridLines &&
+          gridColor == other.gridColor &&
+          pulseWhenSteady == other.pulseWhenSteady;
+
+  @override
+  int get hashCode => Object.hash(
+        fillColor,
+        borderColor,
+        steadyBorderColor,
+        borderWidth,
+        cornerDotRadius,
+        cornerDotColor,
+        showCornerDots,
+        showGridLines,
+        gridColor,
+        pulseWhenSteady,
+      );
 }
 

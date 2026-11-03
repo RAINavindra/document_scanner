@@ -20,6 +20,18 @@ class DocumentScannerCamera extends StatefulWidget {
     this.onError,
     this.appBarTitle = 'Scan Document',
     this.showTopControls = true,
+    this.initialFilter = ScanFilter.enhance,
+    this.imageFilters = const [
+      ScanFilter.none,
+      ScanFilter.enhance,
+      ScanFilter.magicColor,
+      ScanFilter.blackWhite,
+      ScanFilter.grayscale,
+      ScanFilter.sharpen,
+    ],
+    this.edgeColor,
+    this.steadyEdgeColor,
+    this.fillColor,
   });
 
   /// The active scanner controller.
@@ -43,6 +55,25 @@ class DocumentScannerCamera extends StatefulWidget {
   /// Whether to show the top controls bar (flash, auto-capture, close).
   final bool showTopControls;
 
+  /// List of filters to apply to the captured image.
+  final List<ScanFilter> imageFilters;
+
+  /// Filter selected by default.
+  final ScanFilter initialFilter;
+
+  /// Optional shortcut to override the detected edge and line color.
+  /// When provided, this overrides [overlayStyle.borderColor] and harmonizes
+  /// default fill and grid line colors.
+  final Color? edgeColor;
+
+  /// Optional shortcut to override the edge color when document is held steady.
+  /// When provided, this overrides [overlayStyle.steadyBorderColor].
+  final Color? steadyEdgeColor;
+
+  /// Optional shortcut to override the quad fill color.
+  /// When provided, this overrides [overlayStyle.fillColor].
+  final Color? fillColor;
+
   @override
   State<DocumentScannerCamera> createState() => _DocumentScannerCameraState();
 }
@@ -50,6 +81,24 @@ class DocumentScannerCamera extends StatefulWidget {
 class _DocumentScannerCameraState extends State<DocumentScannerCamera>
     with WidgetsBindingObserver {
   bool _isCapturingLocally = false;
+
+  OverlayStyle get _effectiveOverlayStyle {
+    var style = widget.overlayStyle;
+    if (widget.edgeColor != null) {
+      style = style.copyWith(
+        borderColor: widget.edgeColor,
+        fillColor: widget.fillColor ?? widget.edgeColor!.withValues(alpha: 0.2),
+        gridColor: widget.edgeColor!.withValues(alpha: 0.15),
+      );
+    }
+    if (widget.steadyEdgeColor != null) {
+      style = style.copyWith(steadyBorderColor: widget.steadyEdgeColor);
+    }
+    if (widget.fillColor != null) {
+      style = style.copyWith(fillColor: widget.fillColor);
+    }
+    return style;
+  }
 
   @override
   void initState() {
@@ -98,7 +147,8 @@ class _DocumentScannerCameraState extends State<DocumentScannerCamera>
   }
 
   Future<void> _handleCapture() async {
-    if (_isCapturingLocally || widget.controller.state != ScannerState.previewing) {
+    if (_isCapturingLocally ||
+        widget.controller.state != ScannerState.previewing) {
       return;
     }
     _isCapturingLocally = true;
@@ -120,7 +170,8 @@ class _DocumentScannerCameraState extends State<DocumentScannerCamera>
         );
 
         // 2. Open manual corner adjustment screen
-        final corners = fileCorners ??
+        final corners =
+            fileCorners ??
             streamCorners ??
             const DocumentCorners(
               topLeft: (x: 0.08, y: 0.08),
@@ -137,10 +188,12 @@ class _DocumentScannerCameraState extends State<DocumentScannerCamera>
               imagePath: imagePath,
               initialCorners: corners,
               controller: widget.controller,
-              overlayStyle: widget.overlayStyle,
+              overlayStyle: _effectiveOverlayStyle,
               onCropped: (doc) {
                 Navigator.of(context).pop(doc);
               },
+              imageFilters: widget.imageFilters,
+              initialFilter: widget.initialFilter,
             ),
           ),
         );
@@ -179,7 +232,8 @@ class _DocumentScannerCameraState extends State<DocumentScannerCamera>
       label = 'Processing document...';
       bgColor = Colors.deepPurpleAccent;
       icon = Icons.auto_fix_high;
-    } else if (status == AutoCaptureStatus.ready && widget.controller.enableAutoCapture) {
+    } else if (status == AutoCaptureStatus.ready &&
+        widget.controller.enableAutoCapture) {
       label = 'Holding steady! Capturing...';
       bgColor = Colors.green;
       icon = Icons.check_circle;
@@ -235,7 +289,11 @@ class _DocumentScannerCameraState extends State<DocumentScannerCamera>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.error_outline, color: Colors.redAccent, size: 60),
+                const Icon(
+                  Icons.error_outline,
+                  color: Colors.redAccent,
+                  size: 60,
+                ),
                 const SizedBox(height: 16),
                 Text(
                   widget.controller.errorMessage ?? 'An error occurred',
@@ -290,7 +348,7 @@ class _DocumentScannerCameraState extends State<DocumentScannerCamera>
                   ? CustomPaint(
                       painter: QuadOverlayPainter(
                         corners: widget.controller.detectedCorners!,
-                        style: widget.overlayStyle,
+                        style: _effectiveOverlayStyle,
                         isSteady: isSteady,
                       ),
                     )
@@ -383,7 +441,8 @@ class _DocumentScannerCameraState extends State<DocumentScannerCamera>
             right: 0,
             child: Center(
               child: GestureDetector(
-                onTap: (widget.controller.state == ScannerState.previewing &&
+                onTap:
+                    (widget.controller.state == ScannerState.previewing &&
                         !_isCapturingLocally)
                     ? _handleCapture
                     : null,
@@ -421,4 +480,3 @@ class _DocumentScannerCameraState extends State<DocumentScannerCamera>
     );
   }
 }
-

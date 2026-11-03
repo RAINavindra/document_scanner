@@ -47,13 +47,11 @@ class _HomePageState extends State<HomePage> {
     final controller = DocumentScannerController(
       enableAutoCapture: true,
       defaultFilter: ScanFilter.enhance,
-      sensitivity: DetectionSensitivity.lenient
+      sensitivity: DetectionSensitivity.lenient,
     );
 
     final ScannedDocument? result = await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => ScannerScreen(controller: controller),
-      ),
+      MaterialPageRoute(builder: (_) => ScannerScreen(controller: controller)),
     );
 
     if (result != null) {
@@ -63,9 +61,7 @@ class _HomePageState extends State<HomePage> {
 
       if (mounted) {
         Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => ResultScreen(document: result),
-          ),
+          MaterialPageRoute(builder: (_) => ResultScreen(document: result)),
         );
       }
     }
@@ -74,10 +70,7 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Document Scanner'),
-        centerTitle: true,
-      ),
+      appBar: AppBar(title: const Text('Document Scanner'), centerTitle: true),
       body: _scannedDocs.isEmpty
           ? Center(
               child: Padding(
@@ -89,10 +82,9 @@ class _HomePageState extends State<HomePage> {
                       width: 100,
                       height: 100,
                       decoration: BoxDecoration(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .primaryContainer
-                            .withValues(alpha: 0.4),
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.primaryContainer.withValues(alpha: 0.4),
                         shape: BoxShape.circle,
                       ),
                       child: Icon(
@@ -139,7 +131,9 @@ class _HomePageState extends State<HomePage> {
               itemCount: _scannedDocs.length,
               itemBuilder: (context, index) {
                 final doc = _scannedDocs[index];
-                final sizeKb = (doc.bytes.lengthInBytes / 1024).toStringAsFixed(1);
+                final sizeKb = (doc.bytes.lengthInBytes / 1024).toStringAsFixed(
+                  1,
+                );
 
                 return Card(
                   margin: const EdgeInsets.only(bottom: 12),
@@ -182,18 +176,18 @@ class _HomePageState extends State<HomePage> {
                                   'Resolution: ${doc.width} x ${doc.height}',
                                   style: TextStyle(
                                     fontSize: 13,
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSurfaceVariant,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
                                   ),
                                 ),
                                 Text(
                                   'Size: $sizeKb KB',
                                   style: TextStyle(
                                     fontSize: 13,
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSurfaceVariant,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
                                   ),
                                 ),
                               ],
@@ -229,13 +223,15 @@ class ScannerScreen extends StatelessWidget {
       controller: controller,
       appBarTitle: 'Scan Document',
       openCropScreenOnCapture: true,
+      imageFilters: [ScanFilter.enhance, ScanFilter.sharpen],
+      initialFilter: ScanFilter.none,
       onScanned: (document) {
         Navigator.of(context).pop(document);
       },
       onError: (error) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $error')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $error')));
       },
     );
   }
@@ -270,10 +266,15 @@ class ResultScreen extends StatelessWidget {
                     children: [
                       const Text(
                         'Document Details',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                       const Divider(height: 24),
-                      Text('Dimensions: ${document.width} x ${document.height} px'),
+                      Text(
+                        'Dimensions: ${document.width} x ${document.height} px',
+                      ),
                       const SizedBox(height: 8),
                       Text('File Size: $sizeKb KB'),
                       const SizedBox(height: 8),
@@ -290,10 +291,7 @@ class ResultScreen extends StatelessWidget {
         child: InteractiveViewer(
           minScale: 0.5,
           maxScale: 4.0,
-          child: Image.memory(
-            document.bytes,
-            fit: BoxFit.contain,
-          ),
+          child: Image.memory(document.bytes, fit: BoxFit.contain),
         ),
       ),
       bottomNavigationBar: SafeArea(

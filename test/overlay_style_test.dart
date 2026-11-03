@@ -30,6 +30,29 @@ void main() {
       expect(updated.showCornerDots, isTrue);
       expect(updated.pulseWhenSteady, isTrue);
     });
+
+    test('OverlayStyle.fromColor creates harmonized style', () {
+      final style = OverlayStyle.fromColor(
+        Colors.blue,
+        steadyBorderColor: Colors.amber,
+        borderWidth: 3.0,
+      );
+
+      expect(style.borderColor, equals(Colors.blue));
+      expect(style.steadyBorderColor, equals(Colors.amber));
+      expect(style.borderWidth, equals(3.0));
+      expect(style.fillColor, equals(Colors.blue.withValues(alpha: 0.2)));
+    });
+
+    test('equality and hashCode work as expected', () {
+      const style1 = OverlayStyle(borderColor: Colors.red);
+      const style2 = OverlayStyle(borderColor: Colors.red);
+      const style3 = OverlayStyle(borderColor: Colors.blue);
+
+      expect(style1, equals(style2));
+      expect(style1.hashCode, equals(style2.hashCode));
+      expect(style1, isNot(equals(style3)));
+    });
   });
 }
 

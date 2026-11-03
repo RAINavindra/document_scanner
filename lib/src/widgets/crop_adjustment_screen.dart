@@ -14,9 +14,20 @@ class CropAdjustmentScreen extends StatefulWidget {
     required this.imagePath,
     required this.initialCorners,
     required this.controller,
-    this.overlayStyle = const OverlayStyle(showCornerDots: true, borderWidth: 2.0),
+    this.overlayStyle = const OverlayStyle(
+      showCornerDots: true,
+      borderWidth: 2.0,
+    ),
     this.initialFilter = ScanFilter.enhance,
     this.onCropped,
+    this.imageFilters = const [
+      ScanFilter.none,
+      ScanFilter.enhance,
+      ScanFilter.magicColor,
+      ScanFilter.blackWhite,
+      ScanFilter.grayscale,
+      ScanFilter.sharpen,
+    ],
   });
 
   /// Path to the captured full-resolution image file.
@@ -37,6 +48,9 @@ class CropAdjustmentScreen extends StatefulWidget {
   /// Callback invoked when the document has been cropped and processed.
   final ValueChanged<ScannedDocument>? onCropped;
 
+  /// Available image filters to display in the selector.
+  final List<ScanFilter> imageFilters;
+
   @override
   State<CropAdjustmentScreen> createState() => _CropAdjustmentScreenState();
 }
@@ -46,6 +60,7 @@ class _CropAdjustmentScreenState extends State<CropAdjustmentScreen> {
   late ScanPoint _tr;
   late ScanPoint _br;
   late ScanPoint _bl;
+  late final List<ScanFilter> _filters;
   late ScanFilter _selectedFilter;
   bool _isProcessing = false;
 
@@ -62,29 +77,53 @@ class _CropAdjustmentScreenState extends State<CropAdjustmentScreen> {
     _tr = widget.initialCorners.topRight;
     _br = widget.initialCorners.bottomRight;
     _bl = widget.initialCorners.bottomLeft;
+
+    // 1. Deduplicate filters while preserving insertion order
+    final unique = widget.imageFilters.toSet().toList();
+
+    // 2. Fallback to default filters if list is empty
+    if (unique.isEmpty) {
+      unique.addAll(const [
+        ScanFilter.none,
+        ScanFilter.enhance,
+        ScanFilter.magicColor,
+        ScanFilter.blackWhite,
+        ScanFilter.grayscale,
+        ScanFilter.sharpen,
+      ]);
+    }
+
+    // 3. Ensure initialFilter is present in the list
+    if (!unique.contains(widget.initialFilter)) {
+      unique.insert(0, widget.initialFilter);
+    }
+
+    _filters = unique;
     _selectedFilter = widget.initialFilter;
     _resolveImageSize();
   }
 
   void _resolveImageSize() {
     final image = FileImage(File(widget.imagePath));
-    image.resolve(const ImageConfiguration()).addListener(
-      ImageStreamListener(
-        (ImageInfo info, bool _) {
-          if (mounted) {
-            setState(() {
-              _imageSize = Size(
-                info.image.width.toDouble(),
-                info.image.height.toDouble(),
-              );
-            });
-          }
-        },
-        onError: (dynamic error, StackTrace? stackTrace) {
-          debugPrint('Error resolving image size: $error');
-        },
-      ),
-    );
+    image
+        .resolve(const ImageConfiguration())
+        .addListener(
+          ImageStreamListener(
+            (ImageInfo info, bool _) {
+              if (mounted) {
+                setState(() {
+                  _imageSize = Size(
+                    info.image.width.toDouble(),
+                    info.image.height.toDouble(),
+                  );
+                });
+              }
+            },
+            onError: (dynamic error, StackTrace? stackTrace) {
+              debugPrint('Error resolving image size: $error');
+            },
+          ),
+        );
   }
 
   Rect _computeImageRect(Size container, Size imageSize) {
@@ -115,11 +154,11 @@ class _CropAdjustmentScreenState extends State<CropAdjustmentScreen> {
   }
 
   DocumentCorners get _currentCorners => DocumentCorners(
-        topLeft: _tl,
-        topRight: _tr,
-        bottomRight: _br,
-        bottomLeft: _bl,
-      );
+    topLeft: _tl,
+    topRight: _tr,
+    bottomRight: _br,
+    bottomLeft: _bl,
+  );
 
   Future<void> _handleConfirm() async {
     setState(() => _isProcessing = true);
@@ -139,9 +178,9 @@ class _CropAdjustmentScreenState extends State<CropAdjustmentScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to process image: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to process image: $e')));
       }
     } finally {
       if (mounted) setState(() => _isProcessing = false);
@@ -231,7 +270,7 @@ class _CropAdjustmentScreenState extends State<CropAdjustmentScreen> {
             width: 22,
             height: 22,
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: widget.overlayStyle.cornerDotColor,
               shape: BoxShape.circle,
               border: Border.all(
                 color: widget.overlayStyle.borderColor,
@@ -251,16 +290,34 @@ class _CropAdjustmentScreenState extends State<CropAdjustmentScreen> {
     );
   }
 
-  Widget _buildFilterChip(String label, ScanFilter filter) {
+  String _getFilterLabel(ScanFilter filter) {
+    switch (filter) {
+      case ScanFilter.none:
+        return 'Original';
+      case ScanFilter.enhance:
+        return 'Enhance';
+      case ScanFilter.magicColor:
+        return 'Magic Color';
+      case ScanFilter.blackWhite:
+        return 'Black & White';
+      case ScanFilter.grayscale:
+        return 'Grayscale';
+      case ScanFilter.sharpen:
+        return 'Sharpen';
+    }
+  }
+
+  Widget _buildFilterChip(ScanFilter filter) {
     final isSelected = _selectedFilter == filter;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4.0),
       child: ChoiceChip(
-        label: Text(label),
+        label: Text(_getFilterLabel(filter)),
         selected: isSelected,
         selectedColor: Theme.of(context).colorScheme.primaryContainer,
         onSelected: (selected) {
-          if (selected) {
+          // Ignore if already selected to prevent redundant rebuilds
+          if (selected && _selectedFilter != filter) {
             setState(() => _selectedFilter = filter);
           }
         },
@@ -293,7 +350,10 @@ class _CropAdjustmentScreenState extends State<CropAdjustmentScreen> {
                 children: [
                   LayoutBuilder(
                     builder: (context, constraints) {
-                      final size = Size(constraints.maxWidth, constraints.maxHeight);
+                      final size = Size(
+                        constraints.maxWidth,
+                        constraints.maxHeight,
+                      );
                       final imageRect = _imageSize != null
                           ? _computeImageRect(size, _imageSize!)
                           : (Offset.zero & size);
@@ -333,14 +393,18 @@ class _CropAdjustmentScreenState extends State<CropAdjustmentScreen> {
                           _buildCornerHandle(3, _bl, imageRect),
 
                           // Magnifier glass while dragging
-                          if (_activeCornerIndex != null && _dragPosition != null)
+                          if (_activeCornerIndex != null &&
+                              _dragPosition != null)
                             RawMagnifier(
                               focalPointOffset: const Offset(0, -50),
                               magnificationScale: 1.8,
                               size: const Size(90, 90),
                               decoration: MagnifierDecoration(
                                 shape: const CircleBorder(
-                                  side: BorderSide(color: Colors.white, width: 2.5),
+                                  side: BorderSide(
+                                    color: Colors.white,
+                                    width: 2.5,
+                                  ),
                                 ),
                                 shadows: const [
                                   BoxShadow(
@@ -367,8 +431,11 @@ class _CropAdjustmentScreenState extends State<CropAdjustmentScreen> {
                             CircularProgressIndicator(color: Colors.white),
                             SizedBox(height: 16),
                             Text(
-                              'Warping and filtering...',
-                              style: TextStyle(color: Colors.white, fontSize: 16),
+                              'Processing...',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                              ),
                             ),
                           ],
                         ),
@@ -379,23 +446,20 @@ class _CropAdjustmentScreenState extends State<CropAdjustmentScreen> {
             ),
 
             // Filter selector
-            Container(
-              color: Colors.grey[900],
-              padding: const EdgeInsets.symmetric(vertical: 8.0),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 12.0),
-                child: Row(
-                  children: [
-                    _buildFilterChip('Enhance', ScanFilter.enhance),
-                    _buildFilterChip('Magic Color', ScanFilter.magicColor),
-                    _buildFilterChip('Black & White', ScanFilter.blackWhite),
-                    _buildFilterChip('Grayscale', ScanFilter.grayscale),
-                    _buildFilterChip('Original', ScanFilter.none),
-                  ],
+            if (_filters.length > 1)
+              Container(
+                color: Colors.grey[900],
+                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 12.0),
+                  child: Row(
+                    children: _filters
+                        .map((filter) => _buildFilterChip(filter))
+                        .toList(),
+                  ),
                 ),
               ),
-            ),
 
             // Bottom action buttons
             Container(
