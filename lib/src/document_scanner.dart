@@ -40,6 +40,7 @@ class DocumentScanner {
   /// - [initialFilter]: Default filter to apply to the scanned document.
   /// - [imageFilters]: List of available filters in the crop adjustment screen.
   /// - [appBarTitle]: Title displayed in the top bar.
+  /// - [showPreviewConfirmation]: Whether to show the cropped document preview screen before saving. Defaults to true.
   ///
   /// Returns a `List<String>` containing the local file paths of the scanned documents,
   /// or `null` if the user closed the scanner without scanning any documents.
@@ -54,6 +55,7 @@ class DocumentScanner {
     ScanFilter initialFilter = ScanFilter.enhance,
     List<ScanFilter>? imageFilters,
     String appBarTitle = 'Scan Document',
+    bool showPreviewConfirmation = true,
   }) async {
     final targetContext = context ?? navigatorKey?.currentContext;
     if (targetContext == null) {
@@ -75,6 +77,7 @@ class DocumentScanner {
           initialFilter: initialFilter,
           imageFilters: imageFilters,
           appBarTitle: appBarTitle,
+          showPreviewConfirmation: showPreviewConfirmation,
         ),
       ),
     );

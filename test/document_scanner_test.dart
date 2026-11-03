@@ -36,6 +36,13 @@ void main() {
       expect(screen.steadyEdgeColor, equals(Colors.green));
       expect(screen.fillColor, equals(Colors.blue));
       expect(screen.appBarTitle, equals('Custom Scanner'));
+      expect(screen.showPreviewConfirmation, isTrue);
+    });
+
+    test('DocumentPreviewResult carries properties correctly', () {
+      const result = DocumentPreviewResult(isRetake: true);
+      expect(result.isRetake, isTrue);
+      expect(result.document, isNull);
     });
   });
 }

@@ -51,7 +51,6 @@ class _HomePageState extends State<HomePage> {
       context: context,
       isGalleryImportAllowed: true,
       edgeColor: Colors.blueAccent,
-      noOfPages: 1,
       steadyEdgeColor: Colors.greenAccent,
     );
 

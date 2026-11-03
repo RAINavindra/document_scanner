@@ -7,6 +7,7 @@ import '../controller/document_scanner_controller.dart';
 import '../models/overlay_style.dart';
 import '../models/scanner_state.dart';
 import 'crop_adjustment_screen.dart';
+import 'document_preview_screen.dart';
 import 'quad_overlay_painter.dart';
 
 /// Full-featured camera preview widget with real-time document edge detection,
@@ -36,6 +37,7 @@ class DocumentScannerCamera extends StatefulWidget {
     this.isGalleryImportAllowed = false,
     this.bottomTrailingWidget,
     this.onClose,
+    this.showPreviewConfirmation = true,
   });
 
   /// The active scanner controller.
@@ -87,6 +89,9 @@ class DocumentScannerCamera extends StatefulWidget {
   /// Callback when the close/back button is tapped.
   /// If null, defaults to `Navigator.of(context).maybePop()`.
   final VoidCallback? onClose;
+
+  /// Whether to display a preview screen showing the cropped document before finalizing.
+  final bool showPreviewConfirmation;
 
   @override
   State<DocumentScannerCamera> createState() => _DocumentScannerCameraState();
@@ -203,6 +208,7 @@ class _DocumentScannerCameraState extends State<DocumentScannerCamera>
               initialCorners: corners,
               controller: widget.controller,
               overlayStyle: _effectiveOverlayStyle,
+              showPreviewConfirmation: widget.showPreviewConfirmation,
               onCropped: (doc) {
                 Navigator.of(context).pop(doc);
               },
@@ -222,7 +228,27 @@ class _DocumentScannerCameraState extends State<DocumentScannerCamera>
         // Crop directly with detected corners
         final doc = await widget.controller.captureAndProcess();
         if (doc != null && mounted) {
-          widget.onScanned?.call(doc);
+          if (widget.showPreviewConfirmation) {
+            final result =
+                await Navigator.of(context).push<DocumentPreviewResult>(
+              MaterialPageRoute(
+                builder: (_) => DocumentPreviewScreen(
+                  initialDocument: doc,
+                  baseUnfilteredDocument: doc,
+                  controller: widget.controller,
+                  initialFilter: widget.initialFilter,
+                  imageFilters: widget.imageFilters,
+                ),
+              ),
+            );
+            if (result?.document != null && mounted) {
+              widget.onScanned?.call(result!.document!);
+            } else if (mounted) {
+              await widget.controller.resumePreview();
+            }
+          } else {
+            widget.onScanned?.call(doc);
+          }
         }
       }
     } finally {
@@ -264,6 +290,7 @@ class _DocumentScannerCameraState extends State<DocumentScannerCamera>
             initialCorners: corners,
             controller: widget.controller,
             overlayStyle: _effectiveOverlayStyle,
+            showPreviewConfirmation: widget.showPreviewConfirmation,
             onCropped: (doc) {
               Navigator.of(context).pop(doc);
             },

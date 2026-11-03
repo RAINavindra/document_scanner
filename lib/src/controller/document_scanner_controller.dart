@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:isolate';
 import 'package:camera/camera.dart';
 import 'package:document_scan/document_scan.dart';
 import 'package:flutter/foundation.dart';
+import 'package:image/image.dart' as img;
 import 'package:permission_handler/permission_handler.dart';
 
 import '../models/scanner_state.dart';
@@ -322,6 +324,59 @@ class DocumentScannerController extends ChangeNotifier {
       return doc;
     } catch (e) {
       _setError('Failed to crop document: $e');
+      return null;
+    }
+  }
+
+  /// Rotates a [ScannedDocument] image by [degrees] (default 90° clockwise) on a background isolate.
+  Future<ScannedDocument?> rotateDocument(
+    ScannedDocument doc, {
+    int degrees = 90,
+  }) async {
+    try {
+      final docBytes = doc.bytes;
+      final rotated = await Isolate.run(() {
+        final decoded = img.decodeImage(docBytes);
+        if (decoded == null) return null;
+        final rot = img.copyRotate(decoded, angle: degrees);
+        final encoded = img.encodeJpg(rot, quality: 90);
+        return ScannedDocument(
+          bytes: Uint8List.fromList(encoded),
+          width: rot.width,
+          height: rot.height,
+        );
+      });
+      if (rotated != null) {
+        _lastScannedDocument = rotated;
+      }
+      return rotated;
+    } catch (e) {
+      debugPrint('Error rotating document: $e');
+      return null;
+    }
+  }
+
+  /// Applies a [ScanFilter] to an already-cropped [ScannedDocument] on a background isolate.
+  Future<ScannedDocument?> applyFilterToDocument(
+    ScannedDocument doc,
+    ScanFilter filter,
+  ) async {
+    try {
+      final filtered = await _processor.applyFilter(
+        ScanInput.bytes(
+          doc.bytes,
+          width: doc.width,
+          height: doc.height,
+        ),
+        filter,
+        background: true,
+      );
+      if (filtered != null) {
+        _lastScannedDocument = filtered;
+      }
+      return filtered;
+    } catch (e) {
+      debugPrint('Error applying filter to document: $e');
       return null;
     }
   }

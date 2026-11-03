@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../controller/document_scanner_controller.dart';
 import '../models/overlay_style.dart';
+import 'document_preview_screen.dart';
 import 'quad_overlay_painter.dart';
 
 /// Screen allowing users to manually adjust the 4 detected document corners
@@ -28,6 +29,7 @@ class CropAdjustmentScreen extends StatefulWidget {
       ScanFilter.grayscale,
       ScanFilter.sharpen,
     ],
+    this.showPreviewConfirmation = true,
   });
 
   /// Path to the captured full-resolution image file.
@@ -50,6 +52,9 @@ class CropAdjustmentScreen extends StatefulWidget {
 
   /// Available image filters to display in the selector.
   final List<ScanFilter> imageFilters;
+
+  /// Whether to show the [DocumentPreviewScreen] after cropping before final confirmation.
+  final bool showPreviewConfirmation;
 
   @override
   State<CropAdjustmentScreen> createState() => _CropAdjustmentScreenState();
@@ -163,17 +168,67 @@ class _CropAdjustmentScreenState extends State<CropAdjustmentScreen> {
   Future<void> _handleConfirm() async {
     setState(() => _isProcessing = true);
     try {
-      final doc = await widget.controller.cropFile(
-        widget.imagePath,
-        _currentCorners,
-        filter: _selectedFilter,
-      );
+      if (widget.showPreviewConfirmation) {
+        // 1. Crop base warped image with ScanFilter.none for non-destructive preview filtering
+        final baseDoc = await widget.controller.cropFile(
+          widget.imagePath,
+          _currentCorners,
+          filter: ScanFilter.none,
+        );
+        if (baseDoc == null || !mounted) return;
 
-      if (mounted && doc != null) {
-        if (widget.onCropped != null) {
-          widget.onCropped!(doc);
-        } else {
-          Navigator.of(context).pop(doc);
+        // 2. Apply selected filter if different from none
+        final initialFiltered = _selectedFilter == ScanFilter.none
+            ? baseDoc
+            : await widget.controller.applyFilterToDocument(baseDoc, _selectedFilter);
+        if (initialFiltered == null || !mounted) return;
+
+        // 3. Open DocumentPreviewScreen for user inspection and confirmation
+        final result = await Navigator.of(context).push<DocumentPreviewResult>(
+          MaterialPageRoute(
+            builder: (_) => DocumentPreviewScreen(
+              initialDocument: initialFiltered,
+              baseUnfilteredDocument: baseDoc,
+              controller: widget.controller,
+              initialFilter: _selectedFilter,
+              imageFilters: _filters,
+            ),
+          ),
+        );
+
+        if (!mounted || result == null) {
+          // User chose to re-adjust crop corners — stay on this screen
+          return;
+        }
+
+        if (result.isRetake) {
+          // User chose to retake photo entirely
+          widget.controller.resumePreview();
+          Navigator.of(context).pop();
+          return;
+        }
+
+        if (result.document != null) {
+          if (widget.onCropped != null) {
+            widget.onCropped!(result.document!);
+          } else {
+            Navigator.of(context).pop(result.document);
+          }
+        }
+      } else {
+        // Direct crop without separate preview screen
+        final doc = await widget.controller.cropFile(
+          widget.imagePath,
+          _currentCorners,
+          filter: _selectedFilter,
+        );
+
+        if (mounted && doc != null) {
+          if (widget.onCropped != null) {
+            widget.onCropped!(doc);
+          } else {
+            Navigator.of(context).pop(doc);
+          }
         }
       }
     } catch (e) {
@@ -492,8 +547,16 @@ class _CropAdjustmentScreenState extends State<CropAdjustmentScreen> {
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                       ),
-                      icon: const Icon(Icons.check),
-                      label: const Text('Save Document'),
+                      icon: Icon(
+                        widget.showPreviewConfirmation
+                            ? Icons.arrow_forward
+                            : Icons.check,
+                      ),
+                      label: Text(
+                        widget.showPreviewConfirmation
+                            ? 'Preview'
+                            : 'Save Document',
+                      ),
                       onPressed: _isProcessing ? null : _handleConfirm,
                     ),
                   ),

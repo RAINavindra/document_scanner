@@ -25,6 +25,7 @@ export 'src/models/scanner_state.dart';
 
 // UI Widgets
 export 'src/widgets/crop_adjustment_screen.dart';
+export 'src/widgets/document_preview_screen.dart';
 export 'src/widgets/document_scanner_camera.dart';
 export 'src/widgets/document_scanner_screen.dart';
 export 'src/widgets/quad_overlay_painter.dart';

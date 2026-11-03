@@ -11,6 +11,7 @@ A turnkey, high-performance Flutter document scanner package. Combines the offic
 - 📸 **Live Camera Stream Edge Detection:** Real-time quad tracking directly over camera preview via Android YUV420 frame streaming.
 - ⚡ **Auto-Capture:** Analyzes consecutive frame steadiness and confidence to automatically snap the photo when held still.
 - 🎯 **Manual Corner Adjustment:** Post-capture adjustment screen with 4 draggable corner handles and real-time magnifier loupe.
+- 🖼️ **Cropped Document Preview:** Inspect the cropped and perspective-corrected document with pinch-to-zoom, 90° rotation, non-destructive filter toggling, and re-crop options before confirming.
 - 🪄 **Perspective Correction & Filters:** Crops, deskews, and applies clean scan filters (`enhance`, `magicColor`, `blackWhite`, `grayscale`, `none`) on background isolates.
 - 🔦 **Camera Controls:** Flash / torch toggle, camera switching, and auto-capture mode toggle.
 - 🎨 **Customizable Overlays:** Configure quad fill color, border styles, corner pins, and guide grids via `OverlayStyle`.

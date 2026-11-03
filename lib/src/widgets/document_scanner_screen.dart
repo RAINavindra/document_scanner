@@ -20,6 +20,7 @@ class DocumentScannerScreen extends StatefulWidget {
     this.initialFilter = ScanFilter.enhance,
     this.imageFilters,
     this.appBarTitle = 'Scan Document',
+    this.showPreviewConfirmation = true,
   });
 
   /// Whether to allow importing photos from the device gallery.
@@ -50,6 +51,9 @@ class DocumentScannerScreen extends StatefulWidget {
 
   /// Title displayed in the top bar.
   final String appBarTitle;
+
+  /// Whether to display a preview screen showing the cropped document before finalizing.
+  final bool showPreviewConfirmation;
 
   @override
   State<DocumentScannerScreen> createState() => _DocumentScannerScreenState();
@@ -179,6 +183,7 @@ class _DocumentScannerScreenState extends State<DocumentScannerScreen> {
               controller: _controller,
               appBarTitle: _title,
               isGalleryImportAllowed: widget.isGalleryImportAllowed,
+              showPreviewConfirmation: widget.showPreviewConfirmation,
               onClose: () {
                 Navigator.of(context).pop(
                   _scannedFilePaths.isNotEmpty ? _scannedFilePaths : null,
