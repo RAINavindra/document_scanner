@@ -3,6 +3,11 @@ allprojects {
         google()
         mavenCentral()
     }
+    configurations.all {
+        resolutionStrategy {
+            force("org.opencv:opencv:4.12.0")
+        }
+    }
 }
 
 val newBuildDir: Directory =
