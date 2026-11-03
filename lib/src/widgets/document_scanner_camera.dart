@@ -235,13 +235,13 @@ class _DocumentScannerCameraState extends State<DocumentScannerCamera>
     } else if (status == AutoCaptureStatus.ready &&
         widget.controller.enableAutoCapture) {
       label = 'Holding steady! Capturing...';
-      bgColor = Colors.green;
+      bgColor = _effectiveOverlayStyle.steadyBorderColor;
       icon = Icons.check_circle;
     } else if (hasCorners) {
       label = widget.controller.enableAutoCapture
           ? 'Hold steady for auto-capture'
           : 'Document detected';
-      bgColor = Colors.teal;
+      bgColor = _effectiveOverlayStyle.borderColor;
       icon = Icons.document_scanner;
     } else {
       label = 'Align document in view';
@@ -452,7 +452,9 @@ class _DocumentScannerCameraState extends State<DocumentScannerCamera>
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: isSteady ? Colors.greenAccent : Colors.white,
+                      color: isSteady
+                          ? _effectiveOverlayStyle.steadyBorderColor
+                          : Colors.white,
                       width: 4.0,
                     ),
                   ),
@@ -461,7 +463,9 @@ class _DocumentScannerCameraState extends State<DocumentScannerCamera>
                       width: 60,
                       height: 60,
                       decoration: BoxDecoration(
-                        color: isSteady ? Colors.greenAccent : Colors.white,
+                        color: isSteady
+                            ? _effectiveOverlayStyle.steadyBorderColor
+                            : Colors.white,
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(

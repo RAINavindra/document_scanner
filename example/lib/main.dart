@@ -224,7 +224,7 @@ class ScannerScreen extends StatelessWidget {
       appBarTitle: 'Scan Document',
       openCropScreenOnCapture: true,
       imageFilters: [ScanFilter.enhance, ScanFilter.sharpen],
-      initialFilter: ScanFilter.none,
+      initialFilter: ScanFilter.enhance,
       onScanned: (document) {
         Navigator.of(context).pop(document);
       },

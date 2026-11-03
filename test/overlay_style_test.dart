@@ -44,6 +44,13 @@ void main() {
       expect(style.fillColor, equals(Colors.blue.withValues(alpha: 0.2)));
     });
 
+    test('custom borderColor automatically harmonizes steadyBorderColor and fillColor', () {
+      const style = OverlayStyle(borderColor: Colors.blue);
+      expect(style.borderColor, equals(Colors.blue));
+      expect(style.steadyBorderColor, equals(Colors.blue));
+      expect(style.fillColor, equals(Colors.blue.withValues(alpha: 0.2)));
+    });
+
     test('equality and hashCode work as expected', () {
       const style1 = OverlayStyle(borderColor: Colors.red);
       const style2 = OverlayStyle(borderColor: Colors.red);

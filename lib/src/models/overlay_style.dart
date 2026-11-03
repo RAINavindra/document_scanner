@@ -3,17 +3,22 @@ import 'package:flutter/material.dart';
 /// Styling options for the real-time quad overlay and guide indicators.
 class OverlayStyle {
   const OverlayStyle({
-    this.fillColor = const Color(0x334CAF50),
+    Color? fillColor,
     this.borderColor = const Color(0xFF4CAF50),
-    this.steadyBorderColor = const Color(0xFF00E676),
+    Color? steadyBorderColor,
     this.borderWidth = 2.5,
     this.cornerDotRadius = 6.0,
     this.cornerDotColor = Colors.white,
     this.showCornerDots = true,
     this.showGridLines = false,
-    this.gridColor = const Color(0x22FFFFFF),
+    Color? gridColor,
     this.pulseWhenSteady = true,
-  });
+    // ignore: prefer_initializing_formals
+  })  : _fillColor = fillColor,
+        // ignore: prefer_initializing_formals
+        _steadyBorderColor = steadyBorderColor,
+        // ignore: prefer_initializing_formals
+        _gridColor = gridColor;
 
   /// Creates an [OverlayStyle] where edge, line, fill, and grid colors are
   /// automatically harmonized from a single base [color].
@@ -31,7 +36,7 @@ class OverlayStyle {
     return OverlayStyle(
       borderColor: color,
       fillColor: color.withValues(alpha: 0.2),
-      steadyBorderColor: steadyBorderColor ?? const Color(0xFF00E676),
+      steadyBorderColor: steadyBorderColor ?? color,
       borderWidth: borderWidth,
       cornerDotRadius: cornerDotRadius,
       cornerDotColor: cornerDotColor,
@@ -42,14 +47,35 @@ class OverlayStyle {
     );
   }
 
-  /// Fill color inside the detected document quad.
-  final Color fillColor;
+  final Color? _fillColor;
+  final Color? _steadyBorderColor;
+  final Color? _gridColor;
 
   /// Border stroke color when a document quad is detected.
   final Color borderColor;
 
+  /// Fill color inside the detected document quad.
+  /// If omitted, automatically derived from [borderColor].
+  Color get fillColor =>
+      _fillColor ??
+      (borderColor == const Color(0xFF4CAF50)
+          ? const Color(0x334CAF50)
+          : borderColor.withValues(alpha: 0.2));
+
   /// Border stroke color when document is held steady and ready for capture.
-  final Color steadyBorderColor;
+  /// If omitted, defaults to [borderColor] (or [Color(0xFF00E676)] if default green).
+  Color get steadyBorderColor =>
+      _steadyBorderColor ??
+      (borderColor == const Color(0xFF4CAF50)
+          ? const Color(0xFF00E676)
+          : borderColor);
+
+  /// Color of internal grid guide lines.
+  Color get gridColor =>
+      _gridColor ??
+      (borderColor == const Color(0xFF4CAF50)
+          ? const Color(0x22FFFFFF)
+          : borderColor.withValues(alpha: 0.15));
 
   /// Thickness of the quad border lines.
   final double borderWidth;
@@ -65,9 +91,6 @@ class OverlayStyle {
 
   /// Whether to draw light grid lines inside the quad.
   final bool showGridLines;
-
-  /// Color of internal grid guide lines.
-  final Color gridColor;
 
   /// Whether to provide visual pulse when document is steady and ready.
   final bool pulseWhenSteady;
@@ -85,15 +108,15 @@ class OverlayStyle {
     bool? pulseWhenSteady,
   }) {
     return OverlayStyle(
-      fillColor: fillColor ?? this.fillColor,
+      fillColor: fillColor ?? _fillColor,
       borderColor: borderColor ?? this.borderColor,
-      steadyBorderColor: steadyBorderColor ?? this.steadyBorderColor,
+      steadyBorderColor: steadyBorderColor ?? _steadyBorderColor,
       borderWidth: borderWidth ?? this.borderWidth,
       cornerDotRadius: cornerDotRadius ?? this.cornerDotRadius,
       cornerDotColor: cornerDotColor ?? this.cornerDotColor,
       showCornerDots: showCornerDots ?? this.showCornerDots,
       showGridLines: showGridLines ?? this.showGridLines,
-      gridColor: gridColor ?? this.gridColor,
+      gridColor: gridColor ?? _gridColor,
       pulseWhenSteady: pulseWhenSteady ?? this.pulseWhenSteady,
     );
   }
