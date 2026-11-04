@@ -41,6 +41,8 @@ class DocumentScanner {
   /// - [imageFilters]: List of available filters in the crop adjustment screen.
   /// - [appBarTitle]: Title displayed in the top bar.
   /// - [showPreviewConfirmation]: Whether to show the cropped document preview screen before saving. Defaults to true.
+  /// - [enableTapToFocus]: Whether to allow the user to tap on the camera preview to focus and meter exposure.
+  /// - [showFlashlight]: Explicit override to show/hide the flashlight toggle. If null, automatically detects hardware flashlight availability.
   ///
   /// Returns a `List<String>` containing the local file paths of the scanned documents,
   /// or `null` if the user closed the scanner without scanning any documents.
@@ -56,6 +58,8 @@ class DocumentScanner {
     List<ScanFilter>? imageFilters,
     String appBarTitle = 'Scan Document',
     bool showPreviewConfirmation = true,
+    bool enableTapToFocus = true,
+    bool? showFlashlight,
   }) async {
     final targetContext = context ?? navigatorKey?.currentContext;
     if (targetContext == null) {
@@ -78,6 +82,8 @@ class DocumentScanner {
           imageFilters: imageFilters,
           appBarTitle: appBarTitle,
           showPreviewConfirmation: showPreviewConfirmation,
+          enableTapToFocus: enableTapToFocus,
+          showFlashlight: showFlashlight,
         ),
       ),
     );

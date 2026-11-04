@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:isolate';
+import 'dart:ui';
 import 'package:camera/camera.dart';
 import 'package:document_scan/document_scan.dart';
 import 'package:flutter/foundation.dart';
@@ -62,8 +63,10 @@ class DocumentScannerController extends ChangeNotifier {
   AutoCaptureStatus _autoCaptureStatus = AutoCaptureStatus.searching;
   ScannedDocument? _lastScannedDocument;
   String? _lastCapturedImagePath;
+  DocumentCorners? _lastCropCorners;
   String? _errorMessage;
   bool _isFlashOn = false;
+  bool _hasFlash = false;
   bool _isDisposed = false;
   bool _isCapturing = false;
 
@@ -74,10 +77,22 @@ class DocumentScannerController extends ChangeNotifier {
   AutoCaptureStatus get autoCaptureStatus => _autoCaptureStatus;
   ScannedDocument? get lastScannedDocument => _lastScannedDocument;
   String? get lastCapturedImagePath => _lastCapturedImagePath;
+  DocumentCorners? get lastCropCorners => _lastCropCorners;
   String? get errorMessage => _errorMessage;
   bool get isFlashOn => _isFlashOn;
-  bool get isInitialized =>
-      _cameraController != null && _cameraController!.value.isInitialized;
+  bool get hasFlash => _hasFlash;
+
+  @visibleForTesting
+  set hasFlash(bool value) => _hasFlash = value;
+
+  bool get isInitialized {
+    if (_isDisposed || _cameraController == null) return false;
+    try {
+      return _cameraController!.value.isInitialized;
+    } catch (_) {
+      return false;
+    }
+  }
 
   /// Initializes camera hardware, requests permissions, and begins frame stream.
   Future<void> initialize() async {
@@ -123,10 +138,18 @@ class DocumentScannerController extends ChangeNotifier {
         return;
       }
 
-      // 4. Set up detection stream
+      // 4. Probe flash availability
+      await _checkFlashAvailability();
+
+      if (_isDisposed) {
+        await _cameraController?.dispose();
+        return;
+      }
+
+      // 5. Set up detection stream
       _setupDetectionPipeline();
 
-      // 5. Start camera frame stream
+      // 6. Start camera frame stream
       await _cameraController!.startImageStream(_handleCameraFrame);
 
       _setState(ScannerState.previewing);
@@ -248,16 +271,19 @@ class DocumentScannerController extends ChangeNotifier {
         cornersToCrop = fileCorners ?? streamCorners;
       }
 
+      final effectiveCorners = cornersToCrop ??
+          const DocumentCorners(
+            topLeft: (x: 0.0, y: 0.0),
+            topRight: (x: 1.0, y: 0.0),
+            bottomRight: (x: 1.0, y: 1.0),
+            bottomLeft: (x: 0.0, y: 1.0),
+          );
+      _lastCropCorners = effectiveCorners;
+
       // Perform perspective correction & filtering on a background isolate
       final scannedDoc = await _processor.crop(
         ScanInput.file(imagePath),
-        cornersToCrop ??
-            const DocumentCorners(
-              topLeft: (x: 0.0, y: 0.0),
-              topRight: (x: 1.0, y: 0.0),
-              bottomRight: (x: 1.0, y: 1.0),
-              bottomLeft: (x: 0.0, y: 1.0),
-            ),
+        effectiveCorners,
         filter: filter ?? defaultFilter,
         background: true,
       );
@@ -410,19 +436,93 @@ class DocumentScannerController extends ChangeNotifier {
     }
   }
 
-  /// Toggles camera flash (torch mode).
-  Future<void> toggleFlash() async {
-    if (_cameraController == null || !_cameraController!.value.isInitialized) {
+  /// Probes whether this device and camera sensor have a physical flashlight / torch unit.
+  Future<void> _checkFlashAvailability() async {
+    if (_isDisposed || _cameraController == null) {
+      _hasFlash = false;
       return;
     }
 
     try {
-      final nextMode = _isFlashOn ? FlashMode.off : FlashMode.torch;
-      await _cameraController!.setFlashMode(nextMode);
-      _isFlashOn = !_isFlashOn;
+      if (_cameraController!.description.lensDirection != CameraLensDirection.back) {
+        _hasFlash = false;
+        return;
+      }
+
+      await _cameraController!.setFlashMode(FlashMode.torch);
+      final error = _cameraController!.value.errorDescription;
+      if (error != null && error.isNotEmpty) {
+        _hasFlash = false;
+      } else {
+        _hasFlash = true;
+        await _cameraController!.setFlashMode(FlashMode.off);
+      }
+    } catch (_) {
+      _hasFlash = false;
+    }
+  }
+
+  /// Toggles camera flash (torch mode).
+  ///
+  /// Returns `true` if torch mode was successfully toggled, or `false`
+  /// if flashlight is not supported or unavailable on this device.
+  Future<bool> toggleFlash() async {
+    if (_isDisposed || _cameraController == null || !isInitialized) {
+      return false;
+    }
+
+    final targetMode = _isFlashOn ? FlashMode.off : FlashMode.torch;
+    try {
+      await _cameraController!.setFlashMode(targetMode);
+
+      final error = _cameraController!.value.errorDescription;
+      if (targetMode == FlashMode.torch && error != null && error.isNotEmpty) {
+        debugPrint('Camera flash/torch reported driver error: $error');
+        _isFlashOn = false;
+        _hasFlash = false;
+        notifyListeners();
+        return false;
+      }
+
+      _isFlashOn = targetMode == FlashMode.torch;
       notifyListeners();
+      return true;
     } catch (e) {
-      debugPrint('Flash toggle error: $e');
+      debugPrint('Failed to set flash mode to $targetMode: $e');
+      _isFlashOn = false;
+      _hasFlash = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Sets the camera focus and exposure metering point on the sensor.
+  ///
+  /// [point] coordinates are normalized: (0.0, 0.0) is top-left, (1.0, 1.0) is bottom-right.
+  /// Passing `null` resets the sensor back to continuous auto-focus and auto-exposure.
+  Future<void> setFocusPoint(Offset? point, {bool setExposure = true}) async {
+    if (_isDisposed || _cameraController == null || !isInitialized) {
+      return;
+    }
+
+    try {
+      if (point != null) {
+        final clampedPoint = Offset(
+          point.dx.clamp(0.0, 1.0),
+          point.dy.clamp(0.0, 1.0),
+        );
+        await _cameraController!.setFocusPoint(clampedPoint);
+        if (setExposure) {
+          await _cameraController!.setExposurePoint(clampedPoint);
+        }
+      } else {
+        await _cameraController!.setFocusPoint(null);
+        if (setExposure) {
+          await _cameraController!.setExposurePoint(null);
+        }
+      }
+    } catch (e) {
+      debugPrint('Focus/Exposure point adjustment failed or not supported: $e');
     }
   }
 
@@ -453,7 +553,9 @@ class DocumentScannerController extends ChangeNotifier {
     _isDisposed = true;
     _detectionSubscription?.cancel();
     _frameStreamController?.close();
-    _cameraController?.dispose();
+    final cam = _cameraController;
+    _cameraController = null;
+    cam?.dispose();
     super.dispose();
   }
 }

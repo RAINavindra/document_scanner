@@ -4,10 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../controller/document_scanner_controller.dart';
+import '../models/crop_adjustment_result.dart';
 import '../models/overlay_style.dart';
+import '../models/scanned_document_page.dart';
 import '../models/scanner_state.dart';
 import 'crop_adjustment_screen.dart';
 import 'document_preview_screen.dart';
+import 'focus_ring_indicator.dart';
 import 'quad_overlay_painter.dart';
 
 /// Full-featured camera preview widget with real-time document edge detection,
@@ -19,6 +22,7 @@ class DocumentScannerCamera extends StatefulWidget {
     this.overlayStyle = const OverlayStyle(),
     this.openCropScreenOnCapture = true,
     this.onScanned,
+    this.onPageScanned,
     this.onError,
     this.appBarTitle = 'Scan Document',
     this.showTopControls = true,
@@ -38,6 +42,10 @@ class DocumentScannerCamera extends StatefulWidget {
     this.bottomTrailingWidget,
     this.onClose,
     this.showPreviewConfirmation = true,
+    this.enableTapToFocus = true,
+    this.noOfPages,
+    this.currentPagesCount = 0,
+    this.showFlashlight,
   });
 
   /// The active scanner controller.
@@ -51,6 +59,10 @@ class DocumentScannerCamera extends StatefulWidget {
 
   /// Callback fired when a document has been successfully captured and cropped.
   final ValueChanged<ScannedDocument>? onScanned;
+
+  /// Callback fired with full page metadata (uncropped image, corners, filter)
+  /// for multi-page review, non-destructive editing, and re-cropping.
+  final ValueChanged<ScannedDocumentPage>? onPageScanned;
 
   /// Callback fired when an error occurs.
   final ValueChanged<String>? onError;
@@ -93,13 +105,60 @@ class DocumentScannerCamera extends StatefulWidget {
   /// Whether to display a preview screen showing the cropped document before finalizing.
   final bool showPreviewConfirmation;
 
+  /// Whether to allow the user to tap on the camera preview to focus and meter exposure.
+  final bool enableTapToFocus;
+
+  /// Maximum number of pages allowed to scan in this session.
+  final int? noOfPages;
+
+  /// Current number of pages already scanned in this session.
+  final int currentPagesCount;
+
+  /// Explicit override to show/hide flashlight button. If null, automatically detects
+  /// whether the device camera has a physical flashlight unit.
+  final bool? showFlashlight;
+
   @override
   State<DocumentScannerCamera> createState() => _DocumentScannerCameraState();
 }
 
 class _DocumentScannerCameraState extends State<DocumentScannerCamera>
     with WidgetsBindingObserver {
+  final GlobalKey _previewKey = GlobalKey();
   bool _isCapturingLocally = false;
+  Offset? _focusTapPosition;
+  Key? _focusIndicatorKey;
+
+  bool get _isLimitReached =>
+      widget.noOfPages != null && widget.currentPagesCount >= widget.noOfPages!;
+
+  bool get _shouldShowFlash {
+    if (widget.showFlashlight != null) return widget.showFlashlight!;
+    return widget.controller.hasFlash;
+  }
+
+  void _handleTapToFocus(TapDownDetails details) {
+    final renderBox =
+        _previewKey.currentContext?.findRenderObject() as RenderBox?;
+    if (renderBox == null) return;
+
+    final size = renderBox.size;
+    final local = renderBox.globalToLocal(details.globalPosition);
+
+    if (size.width <= 0 || size.height <= 0) return;
+
+    final normalizedPoint = Offset(
+      (local.dx / size.width).clamp(0.0, 1.0),
+      (local.dy / size.height).clamp(0.0, 1.0),
+    );
+
+    widget.controller.setFocusPoint(normalizedPoint);
+
+    setState(() {
+      _focusIndicatorKey = UniqueKey();
+      _focusTapPosition = details.globalPosition;
+    });
+  }
 
   OverlayStyle get _effectiveOverlayStyle {
     var style = widget.overlayStyle;
@@ -132,7 +191,11 @@ class _DocumentScannerCameraState extends State<DocumentScannerCamera>
   }
 
   void _onAutoCaptureTriggered() {
-    if (!mounted || widget.controller.state != ScannerState.previewing) return;
+    if (!mounted ||
+        widget.controller.state != ScannerState.previewing ||
+        _isLimitReached) {
+      return;
+    }
     _handleCapture();
   }
 
@@ -167,6 +230,7 @@ class _DocumentScannerCameraState extends State<DocumentScannerCamera>
 
   Future<void> _handleCapture() async {
     if (_isCapturingLocally ||
+        _isLimitReached ||
         widget.controller.state != ScannerState.previewing) {
       return;
     }
@@ -201,7 +265,7 @@ class _DocumentScannerCameraState extends State<DocumentScannerCamera>
 
         if (!mounted) return;
 
-        final result = await Navigator.of(context).push<ScannedDocument>(
+        final result = await Navigator.of(context).push<dynamic>(
           MaterialPageRoute(
             builder: (_) => CropAdjustmentScreen(
               imagePath: imagePath,
@@ -209,9 +273,6 @@ class _DocumentScannerCameraState extends State<DocumentScannerCamera>
               controller: widget.controller,
               overlayStyle: _effectiveOverlayStyle,
               showPreviewConfirmation: widget.showPreviewConfirmation,
-              onCropped: (doc) {
-                Navigator.of(context).pop(doc);
-              },
               imageFilters: widget.imageFilters,
               initialFilter: widget.initialFilter,
             ),
@@ -219,7 +280,20 @@ class _DocumentScannerCameraState extends State<DocumentScannerCamera>
         );
 
         if (result != null && mounted) {
-          widget.onScanned?.call(result);
+          if (result is CropAdjustmentResult) {
+            widget.onPageScanned?.call(result.toScannedDocumentPage());
+            widget.onScanned?.call(result.document);
+          } else if (result is ScannedDocument) {
+            final page = ScannedDocumentPage(
+              originalImagePath: imagePath,
+              corners: corners,
+              document: result,
+              baseDocument: result,
+              filter: widget.initialFilter,
+            );
+            widget.onPageScanned?.call(page);
+            widget.onScanned?.call(result);
+          }
         } else if (mounted) {
           // If user backed out, resume camera preview
           await widget.controller.resumePreview();
@@ -228,6 +302,15 @@ class _DocumentScannerCameraState extends State<DocumentScannerCamera>
         // Crop directly with detected corners
         final doc = await widget.controller.captureAndProcess();
         if (doc != null && mounted) {
+          final originalPath = widget.controller.lastCapturedImagePath ?? '';
+          final cropCorners = widget.controller.lastCropCorners ??
+              const DocumentCorners(
+                topLeft: (x: 0.08, y: 0.08),
+                topRight: (x: 0.92, y: 0.08),
+                bottomRight: (x: 0.92, y: 0.92),
+                bottomLeft: (x: 0.08, y: 0.92),
+              );
+
           if (widget.showPreviewConfirmation) {
             final result =
                 await Navigator.of(context).push<DocumentPreviewResult>(
@@ -242,11 +325,27 @@ class _DocumentScannerCameraState extends State<DocumentScannerCamera>
               ),
             );
             if (result?.document != null && mounted) {
-              widget.onScanned?.call(result!.document!);
+              final page = ScannedDocumentPage(
+                originalImagePath: originalPath,
+                corners: cropCorners,
+                document: result!.document!,
+                baseDocument: doc,
+                filter: widget.initialFilter,
+              );
+              widget.onPageScanned?.call(page);
+              widget.onScanned?.call(result.document!);
             } else if (mounted) {
               await widget.controller.resumePreview();
             }
           } else {
+            final page = ScannedDocumentPage(
+              originalImagePath: originalPath,
+              corners: cropCorners,
+              document: doc,
+              baseDocument: doc,
+              filter: widget.initialFilter,
+            );
+            widget.onPageScanned?.call(page);
             widget.onScanned?.call(doc);
           }
         }
@@ -257,7 +356,7 @@ class _DocumentScannerCameraState extends State<DocumentScannerCamera>
   }
 
   Future<void> _handleGalleryImport() async {
-    if (_isCapturingLocally) return;
+    if (_isCapturingLocally || _isLimitReached) return;
     _isCapturingLocally = true;
 
     try {
@@ -283,7 +382,7 @@ class _DocumentScannerCameraState extends State<DocumentScannerCamera>
       if (!mounted) return;
 
       // 2. Open manual corner adjustment screen
-      final result = await Navigator.of(context).push<ScannedDocument>(
+      final result = await Navigator.of(context).push<dynamic>(
         MaterialPageRoute(
           builder: (_) => CropAdjustmentScreen(
             imagePath: pickedFile.path,
@@ -291,9 +390,6 @@ class _DocumentScannerCameraState extends State<DocumentScannerCamera>
             controller: widget.controller,
             overlayStyle: _effectiveOverlayStyle,
             showPreviewConfirmation: widget.showPreviewConfirmation,
-            onCropped: (doc) {
-              Navigator.of(context).pop(doc);
-            },
             imageFilters: widget.imageFilters,
             initialFilter: widget.initialFilter,
           ),
@@ -301,7 +397,20 @@ class _DocumentScannerCameraState extends State<DocumentScannerCamera>
       );
 
       if (result != null && mounted) {
-        widget.onScanned?.call(result);
+        if (result is CropAdjustmentResult) {
+          widget.onPageScanned?.call(result.toScannedDocumentPage());
+          widget.onScanned?.call(result.document);
+        } else if (result is ScannedDocument) {
+          final page = ScannedDocumentPage(
+            originalImagePath: pickedFile.path,
+            corners: corners,
+            document: result,
+            baseDocument: result,
+            filter: widget.initialFilter,
+          );
+          widget.onPageScanned?.call(page);
+          widget.onScanned?.call(result);
+        }
       } else if (mounted) {
         await widget.controller.resumePreview();
       }
@@ -321,7 +430,11 @@ class _DocumentScannerCameraState extends State<DocumentScannerCamera>
     final Color bgColor;
     final IconData icon;
 
-    if (widget.controller.state == ScannerState.capturing) {
+    if (_isLimitReached) {
+      label = 'Page limit reached (${widget.currentPagesCount}/${widget.noOfPages}) - Review pages';
+      bgColor = Colors.blueGrey;
+      icon = Icons.check_circle_outline;
+    } else if (widget.controller.state == ScannerState.capturing) {
       label = 'Capturing photo...';
       bgColor = Colors.blueAccent;
       icon = Icons.camera;
@@ -439,19 +552,38 @@ class _DocumentScannerCameraState extends State<DocumentScannerCamera>
         children: [
           // 1. Camera live preview with real-time edge detection quad overlay
           Center(
-            child: CameraPreview(
-              camera,
-              child: widget.controller.detectedCorners != null
-                  ? CustomPaint(
-                      painter: QuadOverlayPainter(
-                        corners: widget.controller.detectedCorners!,
-                        style: _effectiveOverlayStyle,
-                        isSteady: isSteady,
-                      ),
-                    )
-                  : null,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTapDown: widget.enableTapToFocus ? _handleTapToFocus : null,
+              child: KeyedSubtree(
+                key: _previewKey,
+                child: CameraPreview(
+                  camera,
+                  child: widget.controller.detectedCorners != null
+                      ? CustomPaint(
+                          painter: QuadOverlayPainter(
+                            corners: widget.controller.detectedCorners!,
+                            style: _effectiveOverlayStyle,
+                            isSteady: isSteady,
+                          ),
+                        )
+                      : null,
+                ),
+              ),
             ),
           ),
+
+          // 2. Tap-to-focus animated ring indicator
+          if (_focusTapPosition != null)
+            FocusRingIndicator(
+              key: _focusIndicatorKey,
+              position: _focusTapPosition!,
+              onCompleted: () {
+                if (mounted) {
+                  setState(() => _focusTapPosition = null);
+                }
+              },
+            ),
 
           // 3. Top controls bar
           if (widget.showTopControls)
@@ -486,21 +618,40 @@ class _DocumentScannerCameraState extends State<DocumentScannerCamera>
                   // Right actions (Flash & Auto-capture)
                   Row(
                     children: [
-                      CircleAvatar(
-                        backgroundColor: Colors.black45,
-                        child: IconButton(
-                          icon: Icon(
-                            widget.controller.isFlashOn
-                                ? Icons.flash_on
-                                : Icons.flash_off,
-                            color: widget.controller.isFlashOn
-                                ? Colors.amber
-                                : Colors.white,
+                      if (_shouldShowFlash) ...[
+                        CircleAvatar(
+                          backgroundColor: Colors.black45,
+                          child: IconButton(
+                            icon: Icon(
+                              widget.controller.isFlashOn
+                                  ? Icons.flash_on
+                                  : Icons.flash_off,
+                              color: widget.controller.isFlashOn
+                                  ? Colors.amber
+                                  : Colors.white,
+                            ),
+                            onPressed: () async {
+                              final success =
+                                  await widget.controller.toggleFlash();
+                              if (!success &&
+                                  context.mounted &&
+                                  !widget.controller.isFlashOn) {
+                                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Flashlight is not available or supported on this device.',
+                                    ),
+                                    duration: Duration(seconds: 2),
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                              }
+                            },
                           ),
-                          onPressed: widget.controller.toggleFlash,
                         ),
-                      ),
-                      const SizedBox(width: 8),
+                        const SizedBox(width: 8),
+                      ],
                       CircleAvatar(
                         backgroundColor: Colors.black45,
                         child: IconButton(
@@ -542,20 +693,35 @@ class _DocumentScannerCameraState extends State<DocumentScannerCamera>
               children: [
                 // Center shutter capture button
                 GestureDetector(
-                  onTap:
-                      (widget.controller.state == ScannerState.previewing &&
-                          !_isCapturingLocally)
+                  onTap: (widget.controller.state == ScannerState.previewing &&
+                          !_isCapturingLocally &&
+                          !_isLimitReached)
                       ? _handleCapture
-                      : null,
+                      : (_isLimitReached
+                          ? () {
+                              ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    'Page limit reached (${widget.noOfPages}/${widget.noOfPages}). Review pages to continue.',
+                                  ),
+                                  duration: const Duration(seconds: 2),
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                            }
+                          : null),
                   child: Container(
                     width: 76,
                     height: 76,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       border: Border.all(
-                        color: isSteady
-                            ? _effectiveOverlayStyle.steadyBorderColor
-                            : Colors.white,
+                        color: _isLimitReached
+                            ? Colors.grey
+                            : (isSteady
+                                ? _effectiveOverlayStyle.steadyBorderColor
+                                : Colors.white),
                         width: 4.0,
                       ),
                     ),
@@ -564,14 +730,17 @@ class _DocumentScannerCameraState extends State<DocumentScannerCamera>
                         width: 60,
                         height: 60,
                         decoration: BoxDecoration(
-                          color: isSteady
-                              ? _effectiveOverlayStyle.steadyBorderColor
-                              : Colors.white,
+                          color: _isLimitReached
+                              ? Colors.grey.withValues(alpha: 0.5)
+                              : (isSteady
+                                  ? _effectiveOverlayStyle.steadyBorderColor
+                                  : Colors.white),
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(
-                          Icons.camera_alt,
-                          color: Colors.black87,
+                        child: Icon(
+                          _isLimitReached ? Icons.check : Icons.camera_alt,
+                          color:
+                              _isLimitReached ? Colors.white70 : Colors.black87,
                           size: 30,
                         ),
                       ),
@@ -587,17 +756,31 @@ class _DocumentScannerCameraState extends State<DocumentScannerCamera>
                       radius: 26,
                       backgroundColor: Colors.black45,
                       child: IconButton(
-                        icon: const Icon(
+                        icon: Icon(
                           Icons.photo_library,
-                          color: Colors.white,
+                          color: _isLimitReached ? Colors.white30 : Colors.white,
                           size: 24,
                         ),
                         tooltip: 'Import from Gallery',
                         onPressed: (!_isCapturingLocally &&
                                 widget.controller.state ==
-                                    ScannerState.previewing)
+                                    ScannerState.previewing &&
+                                !_isLimitReached)
                             ? _handleGalleryImport
-                            : null,
+                            : (_isLimitReached
+                                ? () {
+                                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          'Page limit reached (${widget.noOfPages}/${widget.noOfPages}). Review pages to continue.',
+                                        ),
+                                        duration: const Duration(seconds: 2),
+                                        behavior: SnackBarBehavior.floating,
+                                      ),
+                                    );
+                                  }
+                                : null),
                       ),
                     ),
                   ),

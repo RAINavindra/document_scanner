@@ -52,6 +52,7 @@ class _HomePageState extends State<HomePage> {
       isGalleryImportAllowed: true,
       edgeColor: Colors.blueAccent,
       steadyEdgeColor: Colors.greenAccent,
+      noOfPages: 3
     );
 
     if (files != null && files.isNotEmpty) {

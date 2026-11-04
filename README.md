@@ -11,9 +11,10 @@ A turnkey, high-performance Flutter document scanner package. Combines the offic
 - 📸 **Live Camera Stream Edge Detection:** Real-time quad tracking directly over camera preview via Android YUV420 frame streaming.
 - ⚡ **Auto-Capture:** Analyzes consecutive frame steadiness and confidence to automatically snap the photo when held still.
 - 🎯 **Manual Corner Adjustment:** Post-capture adjustment screen with 4 draggable corner handles and real-time magnifier loupe.
+- 📑 **Multi-Page Review & Batch Re-Crop:** View and swipe through all scanned pages before final confirmation. Inspect text with pinch-to-zoom, re-crop any individual page from its original uncropped source image, rotate 90°, adjust filters, delete pages, or tap "+ Add" to scan more pages.
 - 🖼️ **Cropped Document Preview:** Inspect the cropped and perspective-corrected document with pinch-to-zoom, 90° rotation, non-destructive filter toggling, and re-crop options before confirming.
 - 🪄 **Perspective Correction & Filters:** Crops, deskews, and applies clean scan filters (`enhance`, `magicColor`, `blackWhite`, `grayscale`, `none`) on background isolates.
-- 🔦 **Camera Controls:** Flash / torch toggle, camera switching, and auto-capture mode toggle.
+- 🔦 **Camera Controls & Focus:** Tap-to-focus and exposure metering with an animated reticle, reliable flash / torch toggle with fallback, and auto-capture mode toggle.
 - 🎨 **Customizable Overlays:** Configure quad fill color, border styles, corner pins, and guide grids via `OverlayStyle`.
 
 ---
@@ -57,10 +58,6 @@ android {
 ```
 
 > **Note on Android 37:** `permission_handler` 13+ introduced a requirement for `compileSdk = 37`. This package pins `permission_handler: ^12.0.3` to maintain standard compatibility with `compileSdk 35/36` and AGP 8/9.
-    defaultConfig {
-        minSdk = 24
-    }
-}
 ```
 
 ---
@@ -78,7 +75,8 @@ import 'package:document_scanner/document_scanner.dart';
 final List<String>? pictures = await DocumentScanner.getPictures(
   context: context, // optional if DocumentScanner.navigatorKey is set in MaterialApp
   isGalleryImportAllowed: true,
-  noOfPages: 3, // optional limit; batch scans until limit or user taps 'Done'
+  noOfPages: 3, // stops captures and prompts review once limit is reached
+  showFlashlight: null, // auto-detects hardware flash; set true/false to override
   edgeColor: Colors.blueAccent,
 );
 

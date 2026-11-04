@@ -3,6 +3,7 @@ import 'package:document_scan/document_scan.dart';
 import 'package:flutter/material.dart';
 
 import '../controller/document_scanner_controller.dart';
+import '../models/crop_adjustment_result.dart';
 import '../models/overlay_style.dart';
 import 'document_preview_screen.dart';
 import 'quad_overlay_painter.dart';
@@ -209,26 +210,42 @@ class _CropAdjustmentScreenState extends State<CropAdjustmentScreen> {
         }
 
         if (result.document != null) {
-          if (widget.onCropped != null) {
-            widget.onCropped!(result.document!);
-          } else {
-            Navigator.of(context).pop(result.document);
-          }
+          final cropResult = CropAdjustmentResult(
+            document: result.document!,
+            baseDocument: baseDoc,
+            originalImagePath: widget.imagePath,
+            corners: _currentCorners,
+            filter: _selectedFilter,
+          );
+          widget.onCropped?.call(result.document!);
+          Navigator.of(context).pop(cropResult);
         }
       } else {
         // Direct crop without separate preview screen
-        final doc = await widget.controller.cropFile(
+        final baseDoc = await widget.controller.cropFile(
           widget.imagePath,
           _currentCorners,
-          filter: _selectedFilter,
+          filter: ScanFilter.none,
         );
+        final doc = _selectedFilter == ScanFilter.none
+            ? baseDoc
+            : (baseDoc != null
+                ? await widget.controller.applyFilterToDocument(
+                    baseDoc,
+                    _selectedFilter,
+                  )
+                : null);
 
         if (mounted && doc != null) {
-          if (widget.onCropped != null) {
-            widget.onCropped!(doc);
-          } else {
-            Navigator.of(context).pop(doc);
-          }
+          final cropResult = CropAdjustmentResult(
+            document: doc,
+            baseDocument: baseDoc ?? doc,
+            originalImagePath: widget.imagePath,
+            corners: _currentCorners,
+            filter: _selectedFilter,
+          );
+          widget.onCropped?.call(doc);
+          Navigator.of(context).pop(cropResult);
         }
       }
     } catch (e) {

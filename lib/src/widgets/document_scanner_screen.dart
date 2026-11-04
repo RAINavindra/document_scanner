@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 
 import '../controller/document_scanner_controller.dart';
 import '../models/overlay_style.dart';
+import '../models/scanned_document_page.dart';
 import '../utils/file_saver.dart';
 import 'document_scanner_camera.dart';
+import 'multi_document_review_screen.dart';
 
 /// Full-screen document scanner flow supporting single-page and multi-page
 /// batch scanning, gallery import, manual corner adjustment, and image filtering.
@@ -21,6 +23,8 @@ class DocumentScannerScreen extends StatefulWidget {
     this.imageFilters,
     this.appBarTitle = 'Scan Document',
     this.showPreviewConfirmation = true,
+    this.enableTapToFocus = true,
+    this.showFlashlight,
   });
 
   /// Whether to allow importing photos from the device gallery.
@@ -55,13 +59,20 @@ class DocumentScannerScreen extends StatefulWidget {
   /// Whether to display a preview screen showing the cropped document before finalizing.
   final bool showPreviewConfirmation;
 
+  /// Whether to allow the user to tap on the camera preview to focus and meter exposure.
+  final bool enableTapToFocus;
+
+  /// Explicit override to show/hide the flashlight toggle. If null, automatically detects
+  /// whether the device camera has a physical flashlight unit.
+  final bool? showFlashlight;
+
   @override
   State<DocumentScannerScreen> createState() => _DocumentScannerScreenState();
 }
 
 class _DocumentScannerScreenState extends State<DocumentScannerScreen> {
   late final DocumentScannerController _controller;
-  final List<String> _scannedFilePaths = [];
+  final List<ScannedDocumentPage> _scannedPages = [];
   bool _isSaving = false;
 
   @override
@@ -78,31 +89,106 @@ class _DocumentScannerScreenState extends State<DocumentScannerScreen> {
     super.dispose();
   }
 
+  Future<void> _handlePageScanned(ScannedDocumentPage page) async {
+    setState(() {
+      _scannedPages.add(page);
+    });
+
+    final isSinglePage = widget.noOfPages == 1;
+    final reachedLimit =
+        widget.noOfPages != null && _scannedPages.length >= widget.noOfPages!;
+
+    if (mounted) {
+      if (isSinglePage) {
+        // Single-page mode -> finalize directly
+        await _saveAndFinish();
+      } else if (reachedLimit) {
+        // Reached limit in multi-page mode -> open review screen directly
+        await _openReviewScreen();
+      } else {
+        // Multi-page batch mode -> resume camera stream for next document
+        await _controller.resumePreview();
+      }
+    }
+  }
+
   Future<void> _handleScanned(ScannedDocument document) async {
-    if (_isSaving) return;
+    // Fallback if onPageScanned wasn't triggered
+    if (_scannedPages.isEmpty || _scannedPages.last.document != document) {
+      final page = ScannedDocumentPage(
+        originalImagePath: _controller.lastCapturedImagePath ?? '',
+        corners: _controller.lastCropCorners ??
+            const DocumentCorners(
+              topLeft: (x: 0.08, y: 0.08),
+              topRight: (x: 0.92, y: 0.08),
+              bottomRight: (x: 0.92, y: 0.92),
+              bottomLeft: (x: 0.08, y: 0.92),
+            ),
+        document: document,
+        baseDocument: document,
+        filter: widget.initialFilter,
+      );
+      await _handlePageScanned(page);
+    }
+  }
+
+  Future<void> _openReviewScreen() async {
+    if (_scannedPages.isEmpty) return;
+
+    final result = await Navigator.of(context).push<dynamic>(
+      MaterialPageRoute(
+        builder: (_) => MultiDocumentReviewScreen(
+          pages: _scannedPages,
+          controller: _controller,
+          noOfPages: widget.noOfPages,
+          imageFilters: widget.imageFilters ??
+              const [
+                ScanFilter.none,
+                ScanFilter.enhance,
+                ScanFilter.magicColor,
+                ScanFilter.blackWhite,
+                ScanFilter.grayscale,
+                ScanFilter.sharpen,
+              ],
+          overlayStyle: widget.overlayStyle,
+          appBarTitle: widget.appBarTitle,
+        ),
+      ),
+    );
+
+    if (result is List<String> && mounted) {
+      // User confirmed all pages in review screen
+      Navigator.of(context).pop(result);
+    } else if (result is List<ScannedDocumentPage> && mounted) {
+      // User deleted, rotated, re-cropped, or tapped "+ Add"
+      setState(() {
+        _scannedPages
+          ..clear()
+          ..addAll(result);
+      });
+      await _controller.resumePreview();
+    } else if (mounted) {
+      // User tapped back from review screen to scan more pages
+      await _controller.resumePreview();
+      setState(() {});
+    }
+  }
+
+  Future<void> _saveAndFinish() async {
+    if (_isSaving || _scannedPages.isEmpty) return;
     setState(() => _isSaving = true);
 
     try {
-      final filePath = await DocumentFileSaver.saveScannedDocument(
-        document,
-        index: _scannedFilePaths.length,
-      );
-
-      _scannedFilePaths.add(filePath);
-
-      // Check if session is complete
-      final isSinglePage = widget.noOfPages == 1;
-      final reachedLimit =
-          widget.noOfPages != null && _scannedFilePaths.length >= widget.noOfPages!;
-
+      final filePaths = <String>[];
+      for (var i = 0; i < _scannedPages.length; i++) {
+        final path = await DocumentFileSaver.saveScannedDocument(
+          _scannedPages[i].document,
+          index: i,
+        );
+        filePaths.add(path);
+      }
       if (mounted) {
-        if (isSinglePage || reachedLimit) {
-          Navigator.of(context).pop(_scannedFilePaths);
-        } else {
-          // Resume preview for next page
-          await _controller.resumePreview();
-          setState(() {});
-        }
+        Navigator.of(context).pop(filePaths);
       }
     } catch (e) {
       if (mounted) {
@@ -111,30 +197,28 @@ class _DocumentScannerScreenState extends State<DocumentScannerScreen> {
         );
       }
     } finally {
-      if (mounted) {
-        setState(() => _isSaving = false);
-      }
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
   String get _title {
     if (widget.noOfPages != null && widget.noOfPages! > 1) {
-      return '${widget.appBarTitle} (${_scannedFilePaths.length}/${widget.noOfPages})';
-    } else if (_scannedFilePaths.isNotEmpty) {
-      return '${widget.appBarTitle} (${_scannedFilePaths.length})';
+      return '${widget.appBarTitle} (${_scannedPages.length}/${widget.noOfPages})';
+    } else if (_scannedPages.isNotEmpty) {
+      return '${widget.appBarTitle} (${_scannedPages.length})';
     }
     return widget.appBarTitle;
   }
 
   Widget? _buildDoneButton() {
-    if (widget.noOfPages == 1 || _scannedFilePaths.isEmpty) {
+    if (widget.noOfPages == 1 || _scannedPages.isEmpty) {
       return null;
     }
 
     return GestureDetector(
-      onTap: () => Navigator.of(context).pop(_scannedFilePaths),
+      onTap: _openReviewScreen,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.primary,
           borderRadius: BorderRadius.circular(24),
@@ -149,8 +233,18 @@ class _DocumentScannerScreenState extends State<DocumentScannerScreen> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: Image.memory(
+                _scannedPages.last.document.bytes,
+                width: 22,
+                height: 28,
+                fit: BoxFit.cover,
+              ),
+            ),
+            const SizedBox(width: 8),
             Text(
-              'Done (${_scannedFilePaths.length})',
+              'Review (${_scannedPages.length})',
               style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.bold,
@@ -158,7 +252,7 @@ class _DocumentScannerScreenState extends State<DocumentScannerScreen> {
               ),
             ),
             const SizedBox(width: 4),
-            const Icon(Icons.check, color: Colors.white, size: 18),
+            const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 14),
           ],
         ),
       ),
@@ -171,9 +265,11 @@ class _DocumentScannerScreenState extends State<DocumentScannerScreen> {
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
-        Navigator.of(context).pop(
-          _scannedFilePaths.isNotEmpty ? _scannedFilePaths : null,
-        );
+        if (_scannedPages.isNotEmpty) {
+          _openReviewScreen();
+          return;
+        }
+        Navigator.of(context).pop(null);
       },
       child: Scaffold(
         backgroundColor: Colors.black,
@@ -184,10 +280,16 @@ class _DocumentScannerScreenState extends State<DocumentScannerScreen> {
               appBarTitle: _title,
               isGalleryImportAllowed: widget.isGalleryImportAllowed,
               showPreviewConfirmation: widget.showPreviewConfirmation,
+              enableTapToFocus: widget.enableTapToFocus,
+              noOfPages: widget.noOfPages,
+              currentPagesCount: _scannedPages.length,
+              showFlashlight: widget.showFlashlight,
               onClose: () {
-                Navigator.of(context).pop(
-                  _scannedFilePaths.isNotEmpty ? _scannedFilePaths : null,
-                );
+                if (_scannedPages.isNotEmpty) {
+                  _openReviewScreen();
+                } else {
+                  Navigator.of(context).pop(null);
+                }
               },
               edgeColor: widget.edgeColor,
               steadyEdgeColor: widget.steadyEdgeColor,
@@ -205,6 +307,7 @@ class _DocumentScannerScreenState extends State<DocumentScannerScreen> {
                   ],
               bottomTrailingWidget: _buildDoneButton(),
               onScanned: _handleScanned,
+              onPageScanned: _handlePageScanned,
               onError: (error) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text('Error: $error')),

@@ -20,7 +20,9 @@ export 'src/utils/file_saver.dart';
 
 // Controller & States
 export 'src/controller/document_scanner_controller.dart';
+export 'src/models/crop_adjustment_result.dart';
 export 'src/models/overlay_style.dart';
+export 'src/models/scanned_document_page.dart';
 export 'src/models/scanner_state.dart';
 
 // UI Widgets
@@ -28,4 +30,6 @@ export 'src/widgets/crop_adjustment_screen.dart';
 export 'src/widgets/document_preview_screen.dart';
 export 'src/widgets/document_scanner_camera.dart';
 export 'src/widgets/document_scanner_screen.dart';
+export 'src/widgets/focus_ring_indicator.dart';
+export 'src/widgets/multi_document_review_screen.dart';
 export 'src/widgets/quad_overlay_painter.dart';
