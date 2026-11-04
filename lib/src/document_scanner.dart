@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:document_scan/document_scan.dart';
 import 'package:flutter/material.dart';
 
@@ -43,6 +44,7 @@ class DocumentScanner {
   /// - [showPreviewConfirmation]: Whether to show the cropped document preview screen before saving. Defaults to true.
   /// - [enableTapToFocus]: Whether to allow the user to tap on the camera preview to focus and meter exposure.
   /// - [showFlashlight]: Explicit override to show/hide the flashlight toggle. If null, automatically detects hardware flashlight availability.
+  /// - [outputDirectory]: Optional custom directory where saved document files will be written. If omitted, files are saved in the app's temporary cache directory.
   ///
   /// Returns a `List<String>` containing the local file paths of the scanned documents,
   /// or `null` if the user closed the scanner without scanning any documents.
@@ -60,6 +62,7 @@ class DocumentScanner {
     bool showPreviewConfirmation = true,
     bool enableTapToFocus = true,
     bool? showFlashlight,
+    Directory? outputDirectory,
   }) async {
     final targetContext = context ?? navigatorKey?.currentContext;
     if (targetContext == null) {
@@ -84,6 +87,7 @@ class DocumentScanner {
           showPreviewConfirmation: showPreviewConfirmation,
           enableTapToFocus: enableTapToFocus,
           showFlashlight: showFlashlight,
+          outputDirectory: outputDirectory,
         ),
       ),
     );

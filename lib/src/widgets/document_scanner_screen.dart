@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:document_scan/document_scan.dart';
 import 'package:flutter/material.dart';
 
@@ -25,6 +26,7 @@ class DocumentScannerScreen extends StatefulWidget {
     this.showPreviewConfirmation = true,
     this.enableTapToFocus = true,
     this.showFlashlight,
+    this.outputDirectory,
   });
 
   /// Whether to allow importing photos from the device gallery.
@@ -65,6 +67,10 @@ class DocumentScannerScreen extends StatefulWidget {
   /// Explicit override to show/hide the flashlight toggle. If null, automatically detects
   /// whether the device camera has a physical flashlight unit.
   final bool? showFlashlight;
+
+  /// Optional custom directory where saved document files will be written.
+  /// If null, defaults to the temporary directory.
+  final Directory? outputDirectory;
 
   @override
   State<DocumentScannerScreen> createState() => _DocumentScannerScreenState();
@@ -141,6 +147,7 @@ class _DocumentScannerScreenState extends State<DocumentScannerScreen> {
           pages: _scannedPages,
           controller: _controller,
           noOfPages: widget.noOfPages,
+          outputDirectory: widget.outputDirectory,
           imageFilters: widget.imageFilters ??
               const [
                 ScanFilter.none,
@@ -184,6 +191,7 @@ class _DocumentScannerScreenState extends State<DocumentScannerScreen> {
         final path = await DocumentFileSaver.saveScannedDocument(
           _scannedPages[i].document,
           index: i,
+          directory: widget.outputDirectory,
         );
         filePaths.add(path);
       }

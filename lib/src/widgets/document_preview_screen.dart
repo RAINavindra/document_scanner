@@ -15,6 +15,21 @@ class DocumentPreviewResult {
 
   /// Whether the user requested to retake the photo entirely.
   final bool isRetake;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is DocumentPreviewResult &&
+          runtimeType == other.runtimeType &&
+          document == other.document &&
+          isRetake == other.isRetake;
+
+  @override
+  int get hashCode => Object.hash(document, isRetake);
+
+  @override
+  String toString() =>
+      'DocumentPreviewResult(isRetake: $isRetake, hasDoc: ${document != null})';
 }
 
 /// Screen allowing users to inspect the final cropped, deskewed, and filtered

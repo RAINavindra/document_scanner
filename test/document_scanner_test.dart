@@ -53,9 +53,14 @@ void main() {
       const result = DocumentPreviewResult(isRetake: true);
       expect(result.isRetake, isTrue);
       expect(result.document, isNull);
+      expect(result.toString(), contains('isRetake: true'));
+
+      const result2 = DocumentPreviewResult(isRetake: true);
+      expect(result, equals(result2));
+      expect(result.hashCode, equals(result2.hashCode));
     });
 
-    test('ScannedDocumentPage model holds and updates properties correctly', () {
+    test('ScannedDocumentPage model holds, updates, compares, and prints properties correctly', () {
       final doc = ScannedDocument(bytes: kTestImageBytes, width: 1, height: 1);
       const corners = DocumentCorners(
         topLeft: (x: 0.1, y: 0.1),
@@ -78,6 +83,7 @@ void main() {
       expect(page.document, equals(doc));
       expect(page.filter, equals(ScanFilter.enhance));
       expect(page.rotationDegrees, equals(0));
+      expect(page.toString(), contains('/path/to/img.jpg'));
 
       final updated = page.copyWith(
         rotationDegrees: 90,
@@ -87,9 +93,20 @@ void main() {
       expect(updated.rotationDegrees, equals(90));
       expect(updated.filter, equals(ScanFilter.magicColor));
       expect(updated.originalImagePath, equals('/path/to/img.jpg'));
+
+      final duplicate = ScannedDocumentPage(
+        originalImagePath: '/path/to/img.jpg',
+        corners: corners,
+        document: doc,
+        baseDocument: doc,
+        filter: ScanFilter.enhance,
+        rotationDegrees: 0,
+      );
+      expect(page, equals(duplicate));
+      expect(page.hashCode, equals(duplicate.hashCode));
     });
 
-    test('CropAdjustmentResult converts to ScannedDocumentPage accurately', () {
+    test('CropAdjustmentResult converts to ScannedDocumentPage accurately and supports equality', () {
       final doc = ScannedDocument(bytes: kTestImageBytes, width: 1, height: 1);
       const corners = DocumentCorners(
         topLeft: (x: 0.05, y: 0.05),
@@ -114,16 +131,33 @@ void main() {
       expect(page.baseDocument, equals(doc));
       expect(page.filter, equals(ScanFilter.blackWhite));
       expect(page.rotationDegrees, equals(180));
+      expect(cropResult.toString(), contains('/test/photo.jpg'));
+
+      final duplicate = CropAdjustmentResult(
+        document: doc,
+        baseDocument: doc,
+        originalImagePath: '/test/photo.jpg',
+        corners: corners,
+        filter: ScanFilter.blackWhite,
+        rotationDegrees: 180,
+      );
+      expect(cropResult, equals(duplicate));
+      expect(cropResult.hashCode, equals(duplicate.hashCode));
     });
 
-    test('Controller handles toggleFlash and setFocusPoint gracefully when uninitialized', () async {
+    test('Controller handles toggleFlash and setFocusPoint gracefully and tracks isDisposed', () async {
       final controller = DocumentScannerController();
+      expect(controller.isDisposed, isFalse);
+
       final result = await controller.toggleFlash();
       expect(result, isFalse);
       expect(controller.isFlashOn, isFalse);
 
       await controller.setFocusPoint(const Offset(0.5, 0.5));
       await controller.setFocusPoint(null);
+
+      controller.dispose();
+      expect(controller.isDisposed, isTrue);
     });
 
     testWidgets('FocusRingIndicator renders and completes animation', (tester) async {

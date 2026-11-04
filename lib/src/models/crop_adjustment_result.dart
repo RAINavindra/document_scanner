@@ -43,4 +43,30 @@ class CropAdjustmentResult {
       rotationDegrees: rotationDegrees,
     );
   }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CropAdjustmentResult &&
+          runtimeType == other.runtimeType &&
+          document == other.document &&
+          baseDocument == other.baseDocument &&
+          originalImagePath == other.originalImagePath &&
+          corners == other.corners &&
+          filter == other.filter &&
+          rotationDegrees == other.rotationDegrees;
+
+  @override
+  int get hashCode => Object.hash(
+        document,
+        baseDocument,
+        originalImagePath,
+        corners,
+        filter,
+        rotationDegrees,
+      );
+
+  @override
+  String toString() =>
+      'CropAdjustmentResult(original: $originalImagePath, filter: $filter, rotation: $rotationDegrees°)';
 }

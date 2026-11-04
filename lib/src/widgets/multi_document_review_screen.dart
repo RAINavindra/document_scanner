@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:document_scan/document_scan.dart';
 import 'package:flutter/material.dart';
 
@@ -35,6 +36,7 @@ class MultiDocumentReviewScreen extends StatefulWidget {
     this.overlayStyle = const OverlayStyle(),
     this.appBarTitle = 'Review Documents',
     this.noOfPages,
+    this.outputDirectory,
   });
 
   /// The list of pages scanned during this session.
@@ -54,6 +56,10 @@ class MultiDocumentReviewScreen extends StatefulWidget {
 
   /// Maximum number of pages allowed in this session.
   final int? noOfPages;
+
+  /// Optional custom directory where saved document files will be written.
+  /// If null, defaults to the temporary directory.
+  final Directory? outputDirectory;
 
   @override
   State<MultiDocumentReviewScreen> createState() =>
@@ -346,6 +352,7 @@ class _MultiDocumentReviewScreenState extends State<MultiDocumentReviewScreen> {
         final path = await DocumentFileSaver.saveScannedDocument(
           _pages[i].document,
           index: i,
+          directory: widget.outputDirectory,
         );
         savedPaths.add(path);
       }

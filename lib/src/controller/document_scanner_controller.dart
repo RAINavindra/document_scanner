@@ -82,6 +82,9 @@ class DocumentScannerController extends ChangeNotifier {
   bool get isFlashOn => _isFlashOn;
   bool get hasFlash => _hasFlash;
 
+  /// Whether this controller has been disposed and should no longer be used.
+  bool get isDisposed => _isDisposed;
+
   @visibleForTesting
   set hasFlash(bool value) => _hasFlash = value;
 
@@ -551,11 +554,17 @@ class DocumentScannerController extends ChangeNotifier {
   @override
   void dispose() {
     _isDisposed = true;
+    _autoCaptureAnalyzer.reset();
     _detectionSubscription?.cancel();
     _frameStreamController?.close();
     final cam = _cameraController;
     _cameraController = null;
-    cam?.dispose();
+    if (cam != null) {
+      if (cam.value.isStreamingImages) {
+        cam.stopImageStream().catchError((_) {});
+      }
+      cam.dispose();
+    }
     super.dispose();
   }
 }

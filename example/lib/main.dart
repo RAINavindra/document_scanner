@@ -45,14 +45,14 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   final List<String> _scannedFiles = [];
 
-  void _openScanner() async {
+  void _openScanner({int? limit = 3}) async {
     // One-line scanner invocation
     final List<String>? files = await DocumentScanner.getPictures(
       context: context,
       isGalleryImportAllowed: true,
       edgeColor: Colors.blueAccent,
       steadyEdgeColor: Colors.greenAccent,
-      noOfPages: 3
+      noOfPages: limit,
     );
 
     if (files != null && files.isNotEmpty) {
@@ -107,13 +107,25 @@ class _HomePageState extends State<HomePage> {
                     ),
                     const SizedBox(height: 32),
                     FilledButton.icon(
-                      onPressed: _openScanner,
-                      icon: const Icon(Icons.camera_alt),
-                      label: const Text('Start Scanning'),
+                      onPressed: () => _openScanner(limit: 3),
+                      icon: const Icon(Icons.copy_all),
+                      label: const Text('Batch Scan (3 Pages)'),
                       style: FilledButton.styleFrom(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 28,
-                          vertical: 16,
+                          horizontal: 24,
+                          vertical: 14,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: () => _openScanner(limit: 1),
+                      icon: const Icon(Icons.camera_alt),
+                      label: const Text('Single Page Scan'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 14,
                         ),
                       ),
                     ),
