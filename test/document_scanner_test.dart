@@ -416,5 +416,112 @@ void main() {
       expect(poppedResult, isA<List<ScannedDocumentPage>>());
       expect((poppedResult as List<ScannedDocumentPage>).isEmpty, isTrue);
     });
+
+    testWidgets('Pressing device back button when camera is opened pops camera and stays on caller page', (tester) async {
+      List<String>? returnedFiles;
+      var returned = false;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => ElevatedButton(
+                onPressed: () async {
+                  returnedFiles = await DocumentScanner.getPictures(
+                    context: context,
+                    isGalleryImportAllowed: true,
+                    imageFilters: const [ScanFilter.enhance],
+                    initialFilter: ScanFilter.enhance,
+                  );
+                  returned = true;
+                },
+                child: const Text('Caller Page Button'),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('Caller Page Button'), findsOneWidget);
+
+      // Tap button to open camera
+      await tester.tap(find.text('Caller Page Button'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // Camera screen is now open
+      expect(find.byType(DocumentScannerScreen), findsOneWidget);
+
+      // Simulate device back button press (Android system back)
+      await tester.binding.handlePopRoute();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      // Camera screen should be closed
+      expect(find.byType(DocumentScannerScreen), findsNothing);
+
+      // Caller page should STILL be visible (not popped)!
+      expect(find.text('Caller Page Button'), findsOneWidget);
+
+      // Returned result should be null
+      expect(returned, isTrue);
+      expect(returnedFiles, isNull);
+    });
+
+    testWidgets('Device back button in MultiDocumentReviewScreen pops back to caller safely', (tester) async {
+      final doc = ScannedDocument(bytes: kTestImageBytes, width: 1, height: 1);
+      const corners = DocumentCorners(
+        topLeft: (x: 0.0, y: 0.0),
+        topRight: (x: 1.0, y: 0.0),
+        bottomRight: (x: 1.0, y: 1.0),
+        bottomLeft: (x: 0.0, y: 1.0),
+      );
+
+      final pages = [
+        ScannedDocumentPage(
+          originalImagePath: '/test/page1.jpg',
+          corners: corners,
+          document: doc,
+          baseDocument: doc,
+          filter: ScanFilter.enhance,
+        ),
+      ];
+
+      final controller = DocumentScannerController();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => ElevatedButton(
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => MultiDocumentReviewScreen(
+                      pages: pages,
+                      controller: controller,
+                      noOfPages: 1,
+                    ),
+                  ),
+                ),
+                child: const Text('Caller Screen'),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Caller Screen'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(MultiDocumentReviewScreen), findsOneWidget);
+
+      // Press device back button
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+
+      // Review screen closed and caller screen visible
+      expect(find.byType(MultiDocumentReviewScreen), findsNothing);
+      expect(find.text('Caller Screen'), findsOneWidget);
+    });
   });
 }

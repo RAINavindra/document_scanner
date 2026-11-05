@@ -82,6 +82,9 @@ class _MultiDocumentReviewScreenState extends State<MultiDocumentReviewScreen> {
 
   @override
   void dispose() {
+    widget.pages
+      ..clear()
+      ..addAll(_pages);
     _pageController.dispose();
     super.dispose();
   }
@@ -395,10 +398,11 @@ class _MultiDocumentReviewScreenState extends State<MultiDocumentReviewScreen> {
     }
 
     return PopScope(
-      canPop: false,
+      canPop: true,
       onPopInvokedWithResult: (didPop, _) {
-        if (didPop) return;
-        Navigator.of(context).pop(_pages);
+        widget.pages
+          ..clear()
+          ..addAll(_pages);
       },
       child: Scaffold(
         backgroundColor: Colors.black,

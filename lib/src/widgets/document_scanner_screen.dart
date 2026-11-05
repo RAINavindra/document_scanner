@@ -270,14 +270,12 @@ class _DocumentScannerScreenState extends State<DocumentScannerScreen> {
   @override
   Widget build(BuildContext context) {
     return PopScope(
-      canPop: false,
+      canPop: _scannedPages.isEmpty,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
         if (_scannedPages.isNotEmpty) {
           _openReviewScreen();
-          return;
         }
-        Navigator.of(context).pop(null);
       },
       child: Scaffold(
         backgroundColor: Colors.black,
