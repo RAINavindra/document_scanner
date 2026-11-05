@@ -43,7 +43,7 @@ class DocumentScannerCamera extends StatefulWidget {
     this.onClose,
     this.showPreviewConfirmation = true,
     this.enableTapToFocus = true,
-    this.noOfPages,
+    this.noOfPages = 1,
     this.currentPagesCount = 0,
     this.showFlashlight,
   });
@@ -108,7 +108,7 @@ class DocumentScannerCamera extends StatefulWidget {
   /// Whether to allow the user to tap on the camera preview to focus and meter exposure.
   final bool enableTapToFocus;
 
-  /// Maximum number of pages allowed to scan in this session.
+  /// Maximum number of pages allowed to scan in this session. Defaults to 1.
   final int? noOfPages;
 
   /// Current number of pages already scanned in this session.

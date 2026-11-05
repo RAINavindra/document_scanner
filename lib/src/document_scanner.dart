@@ -33,7 +33,7 @@ class DocumentScanner {
   /// Parameters:
   /// - [context]: BuildContext used to push the scanner. Required unless [navigatorKey] is attached to your [MaterialApp].
   /// - [isGalleryImportAllowed]: When true, displays a gallery button allowing importing and scanning photos from the photo gallery.
-  /// - [noOfPages]: The maximum number of pages to scan. If 1, automatically finishes after 1 scan. If null or > 1, allows batch scanning.
+  /// - [noOfPages]: The maximum number of pages to scan. Defaults to 1 (single-page mode, which returns immediately upon preview confirmation). If > 1, allows batch scanning up to the limit.
   /// - [edgeColor]: Color of the detected quad border and crop adjustment handles.
   /// - [steadyEdgeColor]: Color of the border when document is held steady and ready for capture.
   /// - [fillColor]: Color of the semi-transparent overlay inside the detected document.
@@ -51,7 +51,7 @@ class DocumentScanner {
   static Future<List<String>?> getPictures({
     BuildContext? context,
     bool isGalleryImportAllowed = false,
-    int? noOfPages,
+    int? noOfPages = 1,
     Color? edgeColor,
     Color? steadyEdgeColor,
     Color? fillColor,

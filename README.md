@@ -94,7 +94,7 @@ import 'package:document_scanner/document_scanner.dart';
 final List<String>? pictures = await DocumentScanner.getPictures(
   context: context, // optional if DocumentScanner.navigatorKey is set
   isGalleryImportAllowed: true,
-  noOfPages: 3, // Batch scans up to 3 pages
+  // noOfPages defaults to 1 (single-page scan). Pass e.g. 3 for batch scanning.
   edgeColor: Colors.blueAccent,
 );
 
@@ -348,7 +348,7 @@ if (result is CropAdjustmentResult) {
 |---|---|---|---|
 | `context` | `BuildContext?` | `null` | Context used to push scanner route. Optional if `DocumentScanner.navigatorKey` is set. |
 | `isGalleryImportAllowed` | `bool` | `false` | When true, renders a gallery button allowing importing and scanning photos from the photo library. |
-| `noOfPages` | `int?` | `null` | Maximum pages allowed. If `1`, completes immediately on first scan. If `> 1`, locks camera on limit. |
+| `noOfPages` | `int?` | `1` | Maximum pages allowed. Defaults to `1` (completes and returns immediately upon preview confirmation). If `> 1`, allows batch scanning up to the limit. |
 | `edgeColor` | `Color?` | `null` | Shortcut for the detected quad border and crop adjustment handles. |
 | `steadyEdgeColor` | `Color?` | `null` | Shortcut for border color when document is held steady and ready for capture. |
 | `fillColor` | `Color?` | `null` | Shortcut for quad interior semi-transparent fill color. |

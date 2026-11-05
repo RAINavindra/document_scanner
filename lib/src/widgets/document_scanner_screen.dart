@@ -15,7 +15,7 @@ class DocumentScannerScreen extends StatefulWidget {
   const DocumentScannerScreen({
     super.key,
     this.isGalleryImportAllowed = false,
-    this.noOfPages,
+    this.noOfPages = 1,
     this.edgeColor,
     this.steadyEdgeColor,
     this.fillColor,
@@ -32,9 +32,9 @@ class DocumentScannerScreen extends StatefulWidget {
   /// Whether to allow importing photos from the device gallery.
   final bool isGalleryImportAllowed;
 
-  /// Maximum number of pages to scan.
-  /// If set to 1, completes and returns immediately after the first scan.
-  /// If null or > 1, allows batch scanning until the limit is reached or the user taps 'Done'.
+  /// Maximum number of pages to scan. Defaults to 1 (single-page mode).
+  /// If set to 1, completes and returns immediately after the first scan is confirmed.
+  /// If > 1, allows batch scanning until the limit is reached or the user taps 'Done'.
   final int? noOfPages;
 
   /// Shortcut for the detected edge line color.
@@ -100,9 +100,9 @@ class _DocumentScannerScreenState extends State<DocumentScannerScreen> {
       _scannedPages.add(page);
     });
 
-    final isSinglePage = widget.noOfPages == 1;
-    final reachedLimit =
-        widget.noOfPages != null && _scannedPages.length >= widget.noOfPages!;
+    final effectiveLimit = widget.noOfPages ?? 1;
+    final isSinglePage = effectiveLimit == 1;
+    final reachedLimit = _scannedPages.length >= effectiveLimit;
 
     if (mounted) {
       if (isSinglePage) {

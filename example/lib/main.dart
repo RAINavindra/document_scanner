@@ -45,8 +45,8 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   final List<String> _scannedFiles = [];
 
-  void _openScanner({int? limit = 3}) async {
-    // One-line scanner invocation
+  void _openScanner({int? limit}) async {
+    // One-line scanner invocation (defaults to 1 page if limit is omitted)
     final List<String>? files = await DocumentScanner.getPictures(
       context: context,
       isGalleryImportAllowed: true,

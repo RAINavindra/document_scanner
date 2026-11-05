@@ -261,7 +261,10 @@ void main() {
       expect(controller.lastCropCorners, isNull);
     });
 
-    testWidgets('DocumentScannerScreen supports showFlashlight and noOfPages parameters', (tester) async {
+    testWidgets('DocumentScannerScreen supports showFlashlight and defaults noOfPages to 1', (tester) async {
+      const screenDefault = DocumentScannerScreen();
+      expect(screenDefault.noOfPages, equals(1));
+
       const screenWithFlash = DocumentScannerScreen(
         showFlashlight: true,
         noOfPages: 5,
@@ -273,7 +276,12 @@ void main() {
         showFlashlight: false,
       );
       expect(screenWithoutFlash.showFlashlight, isFalse);
-      expect(screenWithoutFlash.noOfPages, isNull);
+      expect(screenWithoutFlash.noOfPages, equals(1));
+
+      const screenExplicitNull = DocumentScannerScreen(
+        noOfPages: null,
+      );
+      expect(screenExplicitNull.noOfPages, isNull);
     });
 
     testWidgets('MultiDocumentReviewScreen hides Add button when limit reached and shows it when page deleted', (tester) async {
